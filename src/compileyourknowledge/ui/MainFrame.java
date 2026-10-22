@@ -5,7 +5,6 @@ import javax.swing.JPanel;
 import java.awt.CardLayout;
 import java.awt.Dimension;
 
-/** The single window of the game. Screens are swapped with a CardLayout. */
 public class MainFrame extends JFrame {
 
     public static final String SPLASH = "SPLASH";
@@ -55,9 +54,11 @@ public class MainFrame extends JFrame {
         cards.add(new InfoPanel(this, "How to Play", HOW_TO_PLAY_TEXT), HOW_TO_PLAY);
         cards.add(new InfoPanel(this, "Credits", CREDITS_TEXT), CREDITS);
 
-        cards.setPreferredSize(new Dimension(960, 720));
+        cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
         setContentPane(cards);
+        
         pack();
+        
         setResizable(false);
         setLocationRelativeTo(null); // center on screen
 

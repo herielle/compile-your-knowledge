@@ -2,55 +2,72 @@ package compileyourknowledge.ui;
 
 import compileyourknowledge.util.ImageLibrary;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.BorderFactory;
 import javax.swing.JPanel;
-import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
-import java.awt.FontMetrics;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
+
 /** The splash screen: the intro picture as a full background with the four menu buttons on top. */
 public class SplashPanel extends JPanel {
 
-    // Change this if your file has a different name or extension (for example splash.jpg).
-    private static final String SPLASH_IMAGE = "resources/images/splash.png";
+    // Swap this for resources/images/SplashScreen.png if you want the version with the stars.
+    private static final String SPLASH_IMAGE = "resources/images/MainScreen.png";
     private static final String TITLE = "Compile Your Knowledge";
 
+    // Layout measured from the mockup (all values are fractions of the panel size).
+    private static final double CENTER_X = 0.508;      // lines up with the logo
+    private static final double BUTTON_WIDTH = 0.187;  // width of a button relative to panel width
+    private static final double[] CENTER_Y = {0.518, 0.621, 0.722, 0.826};
+    private static final double PADDING = 0.20;        // transparent room around each button for growing
+
     private final BufferedImage background = ImageLibrary.load(SPLASH_IMAGE);
+    private final ImageButton[] buttons;
 
     public SplashPanel(MainFrame frame) {
-        setLayout(new BorderLayout());
+        setLayout(null); // buttons are positioned by doLayout() below
 
-        GlassButton startButton = new GlassButton("Start");
-        GlassButton howToPlayButton = new GlassButton("How to Play");
-        GlassButton creditsButton = new GlassButton("Credits");
-        GlassButton exitButton = new GlassButton("Exit");
+        ImageButton startButton = new ImageButton(
+                ImageLibrary.load("resources/images/buttons/start.png"), "Start");
+        ImageButton howToPlayButton = new ImageButton(
+                ImageLibrary.load("resources/images/buttons/howToPlay.png"), "How to Play");
+        ImageButton creditsButton = new ImageButton(
+                ImageLibrary.load("resources/images/buttons/credits.png"), "Credits");
+        ImageButton exitButton = new ImageButton(
+                ImageLibrary.load("resources/images/buttons/exit.png"), "Exit");
 
         startButton.addActionListener(e -> frame.showScreen(MainFrame.START));
         howToPlayButton.addActionListener(e -> frame.showScreen(MainFrame.HOW_TO_PLAY));
         creditsButton.addActionListener(e -> frame.showScreen(MainFrame.CREDITS));
         exitButton.addActionListener(e -> System.exit(0));
 
-        JPanel buttonColumn = new JPanel();
-        buttonColumn.setLayout(new BoxLayout(buttonColumn, BoxLayout.Y_AXIS));
-        buttonColumn.setOpaque(false);
-        buttonColumn.setBorder(BorderFactory.createEmptyBorder(0, 0, 30, 0));
-
-        GlassButton[] buttons = {startButton, howToPlayButton, creditsButton, exitButton};
-        for (GlassButton button : buttons) {
-            button.setAlignmentX(Component.CENTER_ALIGNMENT);
-            buttonColumn.add(button);
-            buttonColumn.add(Box.createVerticalStrut(8));
+        buttons = new ImageButton[]{startButton, howToPlayButton, creditsButton, exitButton};
+        for (ImageButton button : buttons) {
+            add(button);
         }
+    }
 
-        add(buttonColumn, BorderLayout.SOUTH);
+    @Override
+    public void doLayout() {
+        int w = getWidth();
+        int h = getHeight();
+        for (int i = 0; i < buttons.length; i++) {
+            ImageButton button = buttons[i];
+            int bw = (int) Math.round(w * BUTTON_WIDTH);
+            int bh = (int) Math.round(bw * button.aspectRatio());
+            int padX = (int) Math.round(bw * PADDING);
+            int padY = (int) Math.round(bh * PADDING);
+
+            int cx = (int) Math.round(w * CENTER_X);
+            int cy = (int) Math.round(h * CENTER_Y[i]);
+
+            button.setBaseSize(bw, bh);
+            button.setBounds(cx - bw / 2 - padX, cy - bh / 2 - padY, bw + 2 * padX, bh + 2 * padY);
+        }
     }
 
     @Override
