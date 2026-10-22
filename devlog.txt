@@ -1,3 +1,7 @@
 HOW TO RUN: 
 
 mkdir -p bin/resources/images && javac -d bin *.java && cp splash.png bin/resources/images/ && java -cp bin compileyourknowledge.Main
+
+10/22/26
+(Herielle)
+    - Added hovering buttons for the Main, trying to work on the Splash Screen
