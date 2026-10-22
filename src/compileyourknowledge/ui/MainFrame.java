@@ -1,10 +1,18 @@
 package compileyourknowledge.ui;
 
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.KeyStroke;
 import java.awt.CardLayout;
 import java.awt.Dimension;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 
+/** The single window of the game. Screens are swapped with a CardLayout. */
 public class MainFrame extends JFrame {
 
     public static final String SPLASH = "SPLASH";
@@ -44,6 +52,7 @@ public class MainFrame extends JFrame {
 
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
+    private boolean fullScreen = false;
 
     public MainFrame() {
         super("Compile Your Knowledge");
@@ -56,13 +65,59 @@ public class MainFrame extends JFrame {
 
         cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
         setContentPane(cards);
-        
         pack();
-        
         setResizable(false);
         setLocationRelativeTo(null); // center on screen
 
+        // F11 toggles full screen, Esc leaves it.
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleFullScreen");
+        getRootPane().getActionMap().put("toggleFullScreen", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                setFullScreen(!fullScreen);
+            }
+        });
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "leaveFullScreen");
+        getRootPane().getActionMap().put("leaveFullScreen", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fullScreen) {
+                    setFullScreen(false);
+                }
+            }
+        });
+
         showScreen(SPLASH);
+        setFullScreen(true); // the game starts in full screen
+    }
+
+    /** Switches between a borderless full-screen window and the normal window. */
+    public void setFullScreen(boolean on) {
+        GraphicsDevice device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        fullScreen = on;
+        if (on) {
+            dispose(); // a window must be closed before its title bar can be removed
+            setUndecorated(true);
+            if (device.isFullScreenSupported()) {
+                device.setFullScreenWindow(this);
+            } else {
+                setExtendedState(MAXIMIZED_BOTH);
+                setVisible(true);
+            }
+        } else {
+            if (device.getFullScreenWindow() == this) {
+                device.setFullScreenWindow(null);
+            }
+            dispose();
+            setUndecorated(false);
+            setExtendedState(NORMAL);
+            pack();
+            setLocationRelativeTo(null);
+            setVisible(true);
+        }
+        requestFocus();
     }
 
     /** Switches to the card registered under the given name. */
