@@ -12,18 +12,17 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 
-/** The splash screen: the intro picture as a full background with the four menu buttons on top. */
 public class SplashPanel extends JPanel {
 
     // Swap this for resources/images/SplashScreen.png if you want the version with the stars.
     private static final String SPLASH_IMAGE = "resources/images/MainScreen.png";
     private static final String TITLE = "Compile Your Knowledge";
 
-    // Layout measured from the mockup (all values are fractions of the panel size).
-    private static final double CENTER_X = 0.508;      // lines up with the logo
-    private static final double BUTTON_WIDTH = 0.187;  // width of a button relative to panel width
+  
+    private static final double CENTER_X = 0.508;      
+    private static final double BUTTON_WIDTH = 0.187;  
     private static final double[] CENTER_Y = {0.518, 0.621, 0.722, 0.826};
-    private static final double PADDING = 0.20;        // transparent room around each button for growing
+    private static final double PADDING = 0.20;       
 
     private final BufferedImage background = ImageLibrary.load(SPLASH_IMAGE);
     private final ImageButton[] buttons;
@@ -42,6 +41,7 @@ public class SplashPanel extends JPanel {
 
         startButton.addActionListener(e -> frame.showScreen(MainFrame.START));
         howToPlayButton.addActionListener(e -> frame.showScreen(MainFrame.HOW_TO_PLAY));
+        
         creditsButton.addActionListener(e -> frame.showScreen(MainFrame.CREDITS));
         exitButton.addActionListener(e -> System.exit(0));
 
@@ -56,9 +56,11 @@ public class SplashPanel extends JPanel {
         int w = getWidth();
         int h = getHeight();
         for (int i = 0; i < buttons.length; i++) {
+
             ImageButton button = buttons[i];
             int bw = (int) Math.round(w * BUTTON_WIDTH);
             int bh = (int) Math.round(bw * button.aspectRatio());
+            
             int padX = (int) Math.round(bw * PADDING);
             int padY = (int) Math.round(bh * PADDING);
 
@@ -84,14 +86,18 @@ public class SplashPanel extends JPanel {
         if (background != null) {
             // Scale the picture to cover the whole panel while keeping its proportions.
             double scale = Math.max((double) w / background.getWidth(), (double) h / background.getHeight());
+            
             int drawW = (int) Math.round(background.getWidth() * scale);
             int drawH = (int) Math.round(background.getHeight() * scale);
+            
             g2.drawImage(background, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH, null);
         } else {
             // Fallback so the title still shows if the picture is missing.
             Theme.paintSky(g2, w, h);
             g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, 48));
+            
             FontMetrics fm = g2.getFontMetrics();
+            
             g2.setColor(Color.WHITE);
             g2.drawString(TITLE, (w - fm.stringWidth(TITLE)) / 2, h / 2);
         }
