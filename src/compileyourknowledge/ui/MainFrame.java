@@ -12,13 +12,13 @@ import java.awt.GraphicsEnvironment;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import compileyourknowledge.util.ImageLibrary;
+import compileyourknowledge.util.SoundManager;
 import java.awt.Cursor;
 import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 
 
-/** The single window of the game. Screens are swapped with a CardLayout. */
 public class MainFrame extends JFrame {
 
     public static final String SPLASH = "SPLASH";
@@ -66,13 +66,16 @@ public class MainFrame extends JFrame {
 
         cards.add(new SplashPanel(this), SPLASH);
         cards.add(new InfoPanel(this, "Compile Your Knowledge", START_TEXT), START);
+        
         cards.add(new InfoPanel(this, "How to Play", HOW_TO_PLAY_TEXT), HOW_TO_PLAY);
         cards.add(new InfoPanel(this, "Credits", CREDITS_TEXT), CREDITS);
 
         cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
         setContentPane(cards);
+        
         applyCustomCursor(); 
         pack();
+       
         setResizable(false);
         setLocationRelativeTo(null); // center on screen
 
@@ -98,6 +101,7 @@ public class MainFrame extends JFrame {
 
         showScreen(SPLASH);
         setFullScreen(true); // the game starts in full screen
+        SoundManager.playOpening(); // opening sound plays once when the game opens
     }
 
     /** Switches between a borderless full-screen window and the normal window. */
@@ -107,6 +111,7 @@ public class MainFrame extends JFrame {
         if (on) {
             dispose(); // a window must be closed before its title bar can be removed
             setUndecorated(true);
+            
             if (device.isFullScreenSupported()) {
                 device.setFullScreenWindow(this);
             } else {
@@ -119,11 +124,14 @@ public class MainFrame extends JFrame {
             }
             dispose();
             setUndecorated(false);
+            
             setExtendedState(NORMAL);
             pack();
+           
             setLocationRelativeTo(null);
             setVisible(true);
         }
+        
         requestFocus();
         applyCustomCursor();
     }
