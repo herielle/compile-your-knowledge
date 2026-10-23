@@ -13,3 +13,5 @@ java -cp "bin:src:lib/*" compileyourknowledge.Main
 
 (Herielle)
     - Created SoundManager.java
+    - Added custom cursor
+    - Bug: Custom Cursor isn't universal, sometimes fat.
