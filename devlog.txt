@@ -1,7 +1,7 @@
 HOW TO RUN: 
 
-javac -d bin $(find src -name "*.java")
-java -cp bin:src compileyourknowledge.Main
+javac -cp "lib/*" -d bin $(find src -name "*.java")
+java -cp "bin:src:lib/*" compileyourknowledge.Main
 
 10/22/26
 (Herielle)
@@ -10,3 +10,6 @@ java -cp bin:src compileyourknowledge.Main
 10/22/26
 (Lorenz)
     Added Sounds folder and sounds for background music and starting
+
+(Herielle)
+    - Created SoundManager.java
