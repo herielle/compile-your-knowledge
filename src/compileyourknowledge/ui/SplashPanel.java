@@ -1,6 +1,7 @@
 package compileyourknowledge.ui;
 
 import compileyourknowledge.util.ImageLibrary;
+import compileyourknowledge.util.SoundManager;
 
 import javax.swing.JPanel;
 import java.awt.Color;
@@ -39,7 +40,10 @@ public class SplashPanel extends JPanel {
         ImageButton exitButton = new ImageButton(
                 ImageLibrary.load("resources/images/buttons/exit.png"), "Exit");
 
-        startButton.addActionListener(e -> frame.showScreen(MainFrame.START));
+        startButton.addActionListener(e -> {
+            SoundManager.playGameplay(); // gameplay music loops from here on
+            frame.showScreen(MainFrame.START);
+        });
         howToPlayButton.addActionListener(e -> frame.showScreen(MainFrame.HOW_TO_PLAY));
         
         creditsButton.addActionListener(e -> frame.showScreen(MainFrame.CREDITS));
