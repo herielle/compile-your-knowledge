@@ -11,6 +11,12 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import compileyourknowledge.util.ImageLibrary;
+import java.awt.Cursor;
+import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.image.BufferedImage;
+
 
 /** The single window of the game. Screens are swapped with a CardLayout. */
 public class MainFrame extends JFrame {
@@ -65,6 +71,7 @@ public class MainFrame extends JFrame {
 
         cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
         setContentPane(cards);
+        applyCustomCursor(); 
         pack();
         setResizable(false);
         setLocationRelativeTo(null); // center on screen
@@ -118,10 +125,24 @@ public class MainFrame extends JFrame {
             setVisible(true);
         }
         requestFocus();
+        applyCustomCursor();
     }
 
     /** Switches to the card registered under the given name. */
     public void showScreen(String name) {
         cardLayout.show(cards, name);
     }
+
+    private void applyCustomCursor() {
+        BufferedImage img = ImageLibrary.load("resources/images/cursor.png");
+            if (img == null) {
+                return; // fall back to the default cursor
+            }
+        
+        Cursor custom = Toolkit.getDefaultToolkit().createCustomCursor(img, new Point(0, 0), "custom");
+        setCursor(custom);
+        cards.setCursor(custom);    
+    }
+
+    
 }
