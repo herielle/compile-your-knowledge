@@ -37,7 +37,7 @@ public class ImageButton extends JButton {
         setOpaque(false);
         setMargin(new java.awt.Insets(0, 0, 0, 0));
         
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+       
             if (source != null) {
                 setText(""); // the picture already contains the label
             }
