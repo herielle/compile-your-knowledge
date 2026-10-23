@@ -6,3 +6,7 @@ java -cp bin:src compileyourknowledge.Main
 10/22/26
 (Herielle)
     - Added hovering buttons for the Main, trying to work on the Splash Screen
+
+10/22/26
+(Lorenz)
+    Added Sounds folder and sounds for background music and starting
