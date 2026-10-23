@@ -2,7 +2,6 @@ package compileyourknowledge.ui;
 
 import javax.swing.JButton;
 import javax.swing.Timer;
-import java.awt.Cursor;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
