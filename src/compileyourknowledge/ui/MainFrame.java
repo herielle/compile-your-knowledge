@@ -23,6 +23,8 @@ public class MainFrame extends JFrame {
 
     public static final String SPLASH = "SPLASH";
     public static final String START = "START";
+    public static final String THEORETICAL = "THEORETICAL";
+    public static final String PRACTICAL = "PRACTICAL";
     public static final String HOW_TO_PLAY = "HOW_TO_PLAY";
     public static final String CREDITS = "CREDITS";
 
@@ -50,10 +52,16 @@ public class MainFrame extends JFrame {
             CMSC 13: Survey of Programming Paradigms, University of the Philippines Tacloban College.
             """;
 
-    private static final String START_TEXT = """
+    private static final String THEORETICAL_TEXT = """
             Placeholder screen.
 
-            The Theoretical and Practical program-selection window will appear here in a later milestone.
+            The Theoretical topic list will appear here in a later milestone.
+            """;
+
+    private static final String PRACTICAL_TEXT = """
+            Placeholder screen.
+
+            The Practical topic list will appear here in a later milestone.
             """;
 
     private final CardLayout cardLayout = new CardLayout();
@@ -65,7 +73,9 @@ public class MainFrame extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         cards.add(new SplashPanel(this), SPLASH);
-        cards.add(new InfoPanel(this, "Compile Your Knowledge", START_TEXT), START);
+        cards.add(new PlayPanel(this), START);
+        cards.add(new InfoPanel(this, "Theoretical", THEORETICAL_TEXT), THEORETICAL);
+        cards.add(new InfoPanel(this, "Praactical", PRACTICAL_TEXT), PRACTICAL);
         
         cards.add(new InfoPanel(this, "How to Play", HOW_TO_PLAY_TEXT), HOW_TO_PLAY);
         cards.add(new InfoPanel(this, "Credits", CREDITS_TEXT), CREDITS);

@@ -1,7 +1,7 @@
 HOW TO RUN: 
 
-javac -cp "lib/*" -d bin $(find src -name "*.java")
-java -cp "bin:src:lib/*" compileyourknowledge.Main
+javac -d bin $(find src -name "*.java")
+java -cp bin:src compileyourknowledge.Main
 
 10/22/26
 (Herielle)
@@ -9,9 +9,8 @@ java -cp "bin:src:lib/*" compileyourknowledge.Main
 
 10/22/26
 (Lorenz)
-    Added Sounds folder and sounds for background music and starting
+    - Added Sounds folder and sounds for background music and starting
 
-(Herielle)
-    - Created SoundManager.java
-    - Added custom cursor
-    - Bug: Custom Cursor isn't universal, sometimes fat.
+10/23/26
+(Lorenz)
+    -  Added PlayPanel.Java and playscreen for theoretical and practical 
