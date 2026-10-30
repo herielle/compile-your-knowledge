@@ -11,6 +11,7 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import compileyourknowledge.model.SampleQuestions;
 import compileyourknowledge.util.ImageLibrary;
 import compileyourknowledge.util.SoundManager;
 import java.awt.Cursor;
@@ -74,8 +75,9 @@ public class MainFrame extends JFrame {
 
         cards.add(new SplashPanel(this), SPLASH);
         cards.add(new PlayPanel(this), START);
-        cards.add(new InfoPanel(this, "Theoretical", THEORETICAL_TEXT), THEORETICAL);
-        cards.add(new InfoPanel(this, "Praactical", PRACTICAL_TEXT), PRACTICAL);
+        // Hardcoded question windows for now; the topic grids will come later.
+        cards.add(new QuestionPanel(this, "Theoretical", SampleQuestions.theoretical()), THEORETICAL);
+        cards.add(new QuestionPanel(this, "Practical", SampleQuestions.practical()), PRACTICAL);
         
         cards.add(new InfoPanel(this, "How to Play", HOW_TO_PLAY_TEXT), HOW_TO_PLAY);
         cards.add(new InfoPanel(this, "Credits", CREDITS_TEXT), CREDITS);
