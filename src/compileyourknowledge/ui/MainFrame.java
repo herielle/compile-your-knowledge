@@ -30,18 +30,6 @@ public class MainFrame extends JFrame {
     public static final String CREDITS = "CREDITS";
     public static final String CREDITS_INSPIRATION = "CREDITS_INSPIRATION";
 
-    private static final String THEORETICAL_TEXT = """
-            Placeholder screen.
-
-            The Theoretical topic list will appear here in a later milestone.
-            """;
-
-    private static final String PRACTICAL_TEXT = """
-            Placeholder screen.
-
-            The Practical topic list will appear here in a later milestone.
-            """;
-
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
     private boolean fullScreen = false;
