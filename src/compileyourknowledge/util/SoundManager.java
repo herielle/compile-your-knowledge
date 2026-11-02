@@ -22,19 +22,27 @@ public final class SoundManager {
 
     /** Plays the opening sound once. Restarts it if it is already playing. */
     public static synchronized void playOpening() {
-        stopOpening();
-        opening = new Track(OPENING_SOUND, false);
-        opening.start();
+        try {
+            stopOpening();
+            opening = new Track(OPENING_SOUND, false);
+            opening.start();
+        } catch (Throwable t) {
+            System.err.println("Could not play opening sound: " + t);
+        }
     }
 
     /** Stops the opening sound and starts the gameplay music, looping forever. */
     public static synchronized void playGameplay() {
-        if (gameplay != null && gameplay.isRunning()) {
-            return; // already playing, don't stack a second copy on top
+        try {
+            if (gameplay != null && gameplay.isRunning()) {
+                return; // already playing, don't stack a second copy on top
+            }
+            stopOpening();
+            gameplay = new Track(GAMEPLAY_SOUND, true);
+            gameplay.start();
+        } catch (Throwable t) {
+            System.err.println("Could not play gameplay music: " + t);
         }
-        stopOpening();
-        gameplay = new Track(GAMEPLAY_SOUND, true);
-        gameplay.start();
     }
 
     public static synchronized void stopOpening() {
@@ -84,17 +92,34 @@ public final class SoundManager {
         }
 
         void start() {
-            thread.start();
+            try {
+                thread.start();
+            } catch (Throwable t) {
+                System.err.println("Sound could not start: " + t);
+            }
         }
 
         boolean isRunning() {
             return thread.isAlive() && !stopped;
         }
 
-        synchronized void stop() {
+        void stop() {
             stopped = true;
-            if (player != null) {
-                player.close(); // makes the blocking play() call return
+            final Player p;
+            synchronized (this) {
+                p = player;
+            }
+            if (p != null) {
+                // close() can wait for audio to drain, so never do it on the UI thread
+                Thread closer = new Thread(() -> {
+                    try {
+                        p.close(); // makes the blocking play() call return
+                    } catch (Throwable ignored) {
+                        // nothing to do
+                    }
+                }, "sound-closer");
+                closer.setDaemon(true);
+                closer.start();
             }
         }
 
@@ -121,7 +146,7 @@ public final class SoundManager {
                         return;
                     }
                     p.play(); // blocks until the track ends or stop() is called
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     System.err.println("Sound playback failed for '" + path + "': " + e.getMessage());
                     return;
                 }
