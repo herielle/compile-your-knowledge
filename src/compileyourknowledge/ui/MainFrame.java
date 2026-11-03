@@ -28,42 +28,7 @@ public class MainFrame extends JFrame {
     public static final String PRACTICAL = "PRACTICAL";
     public static final String HOW_TO_PLAY = "HOW_TO_PLAY";
     public static final String CREDITS = "CREDITS";
-
-    private static final String HOW_TO_PLAY_TEXT = """
-            1. Click Start, then choose Theoretical or Practical.
-            2. Click an unlocked topic to load its questions. Locked topics open after the previous topic is cleared.
-            3. Read the question and click one of the four answers (A to D).
-            4. Use one lifeline per game before answering: Peek shows a hint, Copy removes two wrong answers, and Save banks your score as a checkpoint.
-            5. A correct answer moves you to a harder question. A wrong answer disables that choice and costs one heart.
-            6. Clear every question to win. Lose all three hearts and the round ends in Game Over.
-            """;
-
-    private static final String CREDITS_TEXT = """
-            Developers
-            Herielle Margallo
-            Lorenz Ed Ocampo
-
-            Inspiration and References
-            The game show "Are You Smarter Than a 5th Grader?" and the Windows 95 and Frutiger Aero looks.
-
-            Assets, Libraries, and Tools
-            Image and visual references from Pinterest creators and authors.
-            Visual assets and UI elements from Canva.
-
-            CMSC 13: Survey of Programming Paradigms, University of the Philippines Tacloban College.
-            """;
-
-    private static final String THEORETICAL_TEXT = """
-            Placeholder screen.
-
-            The Theoretical topic list will appear here in a later milestone.
-            """;
-
-    private static final String PRACTICAL_TEXT = """
-            Placeholder screen.
-
-            The Practical topic list will appear here in a later milestone.
-            """;
+    public static final String CREDITS_INSPIRATION = "CREDITS_INSPIRATION";
 
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
@@ -79,8 +44,17 @@ public class MainFrame extends JFrame {
         cards.add(new QuestionPanel(this, "Theoretical", SampleQuestions.theoretical()), THEORETICAL);
         cards.add(new QuestionPanel(this, "Practical", SampleQuestions.practical()), PRACTICAL);
         
-        cards.add(new InfoPanel(this, "How to Play", HOW_TO_PLAY_TEXT), HOW_TO_PLAY);
-        cards.add(new InfoPanel(this, "Credits", CREDITS_TEXT), CREDITS);
+        cards.add(new ScreenPanel(this, "resources/images/HowToPlayScreen.png"), HOW_TO_PLAY);
+
+        // Credits has two pages: Developers (right arrow) and Inspiration/References (left arrow).
+        ScreenPanel developers = new ScreenPanel(this, "resources/images/CreditsDevelopers.png");
+        developers.addHotspot(1726, 662, 151, 151, "Next",
+                () -> showScreen(CREDITS_INSPIRATION));
+        ScreenPanel inspiration = new ScreenPanel(this, "resources/images/CreditsInspiration.png");
+        inspiration.addHotspot(123, 662, 151, 151, "Previous",
+                () -> showScreen(CREDITS));
+        cards.add(developers, CREDITS);
+        cards.add(inspiration, CREDITS_INSPIRATION);
 
         cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
         setContentPane(cards);

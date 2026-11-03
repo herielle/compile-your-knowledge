@@ -41,8 +41,12 @@ public class SplashPanel extends JPanel {
                 ImageLibrary.load("resources/images/buttons/exit.png"), "Exit");
 
         startButton.addActionListener(e -> {
-            SoundManager.playGameplay(); // gameplay music loops from here on
-            frame.showScreen(MainFrame.START);
+            frame.showScreen(MainFrame.START); // switch screens first so sound can never block it
+            try {
+                SoundManager.playGameplay(); // gameplay music loops from here on
+            } catch (Throwable t) {
+                System.err.println("Could not start gameplay music: " + t);
+            }
         });
         howToPlayButton.addActionListener(e -> frame.showScreen(MainFrame.HOW_TO_PLAY));
         
