@@ -21,12 +21,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * The question window, laid out to match the mockup (resources/images/background.png).
- * Everything is positioned in artwork coordinates and scaled to the panel, the same way
- * PlayPanel does it. The question text and the A-D choice lines sit in a JScrollPane
- * inside the grey question panel, so long questions and code listings can be scrolled.
- */
 public class QuestionPanel extends JPanel {
 
     // ---- artwork-space layout (the mockup, 2296 x 1624 units) -------------------------
@@ -35,8 +29,8 @@ public class QuestionPanel extends JPanel {
 
     private static final double[] TITLE = {150, 235};               // left edge, vertical center
     private static final double[] CLOSE = {2095, 205, 62, 62};      // the X in the title bar
-    private static final double[] TEXT_BOX = {185, 468, 1938, 590}; // x, y, w, h of the scroll area (below the hearts)
-    private static final double[] HEARTS = {1950, 380, 168, 78};    // x, y, w, h (up to 3 hearts)
+    private static final double[] TEXT_BOX = {178, 378, 1950, 688}; // x, y, w, h of the scroll area (the whole grey panel)
+    private static final double[] HEARTS = {1685, 392, 420, 120};    // x, y, w, h (up to 3 hearts, right aligned)
 
     private static final double LETTER_Y = 1162;
     private static final double LETTER_SIZE = 234;
@@ -48,10 +42,7 @@ public class QuestionPanel extends JPanel {
             {1536, 1168, 377, 102},
             {1756, 1294, 375, 102}};
 
-    /**
-     * Draws the grey OS window (frame, title bar, white inner area, question panel) in code.
-     * Turn off only if background.png already contains the window artwork.
-     */
+    
     private static final boolean DRAW_WINDOW = true;
 
     private static final double PADDING = 0.12; // room around image buttons for the hover grow
@@ -68,14 +59,15 @@ public class QuestionPanel extends JPanel {
     private final Question[] questions;
 
     private final BufferedImage background = ImageLibrary.load("resources/images/background.png");
-    private final BufferedImage heartImage = ImageLibrary.load("resources/images/heart.png");
-    private final BufferedImage correctImage = ImageLibrary.load("resources/images/correct.png");
-    private final BufferedImage wrongImage = ImageLibrary.load("resources/images/wrong.png");
+    private final BufferedImage heartImage = cropToAlpha(ImageLibrary.load("resources/images/heart.png"));
+    private final BufferedImage correctImage = cropToAlpha(ImageLibrary.load("resources/images/correct.png"));
+    private final BufferedImage wrongImage = cropToAlpha(ImageLibrary.load("resources/images/wrong.png"));
 
     private final JTextArea textArea = new JTextArea();
     private final JScrollPane scroll;
     private final ImageButton[] letterButtons = new ImageButton[4];
     private final Mark[] marks = new Mark[4];
+    private final HeartsOverlay heartsOverlay = new HeartsOverlay();
     private final ImageButton peekButton;
     private final ImageButton copyButton;
     private final ImageButton saveButton;
@@ -119,6 +111,8 @@ public class QuestionPanel extends JPanel {
         scroll.getViewport().setOpaque(false);
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(20);
+        // No visible scroll bar; the mouse wheel and trackpad still scroll the text.
+        scroll.getVerticalScrollBar().setPreferredSize(new java.awt.Dimension(0, 0));
 
         String[] letters = {"a", "b", "c", "d"};
         for (int i = 0; i < 4; i++) {
@@ -148,7 +142,8 @@ public class QuestionPanel extends JPanel {
         againButton.addActionListener(e -> startRound());
         againButton.setVisible(false);
 
-        // Add order is paint order top to bottom: marks sit above the letter buttons.
+        // Add order is paint order top to bottom: hearts and marks sit above everything else.
+        add(heartsOverlay);
         for (Mark m : marks) {
             add(m);
         }
@@ -203,7 +198,11 @@ public class QuestionPanel extends JPanel {
         double s = scale();
 
         scroll.setBounds(sx(TEXT_BOX[0]), sy(TEXT_BOX[1]), sl(TEXT_BOX[2]), sl(TEXT_BOX[3]));
-        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(11, (int) Math.round(34 * s))));
+        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(11, (int) Math.round(41 * s))));
+
+        heartsOverlay.setBounds(sx(HEARTS[0]), sy(HEARTS[1]), sl(HEARTS[2]), sl(HEARTS[3]));
+        // Leave room at the top of the text for the hearts; the text scrolls up past them.
+        textArea.setMargin(new java.awt.Insets(sl(HEARTS[3] + 24), 10, 8, 10));
 
         closeButton.setBounds(sx(CLOSE[0]), sy(CLOSE[1]), sl(CLOSE[2]), sl(CLOSE[3]));
 
@@ -268,28 +267,67 @@ public class QuestionPanel extends JPanel {
         int ty = sy(TITLE[1]) + (fm.getAscent() - fm.getDescent()) / 2;
         g2.drawString(title, sx(TITLE[0]), ty);
 
-        // Hearts, top right of the question panel (one image per remaining life).
-        int heartH = sl(HEARTS[3]);
-        int heartW = heartImage == null ? heartH
-                : (int) Math.round(heartH * (double) heartImage.getWidth() / heartImage.getHeight());
-        int right = sx(HEARTS[0] + HEARTS[2]);
-        for (int i = 0; i < lives; i++) {
-            int x = right - (i + 1) * heartW - i * sl(4);
-            if (heartImage != null) {
-                g2.drawImage(heartImage, x, sy(HEARTS[1]), heartW, heartH, null);
-            } else {
-                g2.setColor(Color.RED);
-                g2.fillOval(x, sy(HEARTS[1]), heartH, heartH);
-            }
-        }
-
         // Progress and score, small, along the bottom edge of the question panel.
         g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, sl(26))));
         g2.setColor(new Color(40, 40, 40));
         String status = "Question " + Math.min(current + 1, questions.length) + "/" + questions.length
                 + "   Score: " + score;
-        g2.drawString(status, sx(TEXT_BOX[0] + 12), sy(1110));
+        g2.drawString(status, sx(TEXT_BOX[0] + 14), sy(1108));
         g2.dispose();
+    }
+
+    /** Draws one heart per remaining life, right aligned, on top of the scrolling text. */
+    private class HeartsOverlay extends JComponent {
+        @Override
+        public boolean contains(int x, int y) {
+            return false;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            int h = getHeight();
+            int w = heartImage == null ? h
+                    : (int) Math.round(h * (double) heartImage.getWidth() / heartImage.getHeight());
+            int gap = Math.max(2, h / 24);
+            for (int i = 0; i < lives; i++) {
+                int x = getWidth() - (i + 1) * w - i * gap;
+                if (heartImage != null) {
+                    g2.drawImage(heartImage, x, 0, w, h, null);
+                } else {
+                    g2.setColor(Color.RED);
+                    g2.fillOval(x, 0, h, h);
+                }
+            }
+            g2.dispose();
+        }
+    }
+
+    /** Trims transparent borders so the picture fills the box it is drawn into. */
+    private static BufferedImage cropToAlpha(BufferedImage img) {
+        if (img == null) {
+            return null;
+        }
+        int minX = img.getWidth();
+        int minY = img.getHeight();
+        int maxX = -1;
+        int maxY = -1;
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                if (((img.getRGB(x, y) >>> 24) & 0xFF) > 10) {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
+            }
+        }
+        if (maxX < minX || maxY < minY) {
+            return img;
+        }
+        return img.getSubimage(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     private void fillArt(Graphics2D g2, double x, double y, double w, double h, Color c) {
