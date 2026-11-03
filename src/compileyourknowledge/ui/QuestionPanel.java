@@ -20,6 +20,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 public class QuestionPanel extends JPanel {
 
@@ -56,7 +57,9 @@ public class QuestionPanel extends JPanel {
 
     private final MainFrame frame;
     private final String windowTitle;
-    private final Question[] questions;
+    /** Called at the start of every round, so each round can come back freshly shuffled. */
+    private final Supplier<Question[]> questionSource;
+    private Question[] questions = new Question[0];
 
     private final BufferedImage background = ImageLibrary.load("resources/images/background.png");
     private final BufferedImage heartImage = cropToAlpha(ImageLibrary.load("resources/images/heart.png"));
@@ -89,10 +92,16 @@ public class QuestionPanel extends JPanel {
     private final boolean[] removed = new boolean[4];
     private Timer nextTimer;
 
+    /** A panel that always plays the same fixed list of questions. */
     public QuestionPanel(MainFrame frame, String windowTitle, Question[] questions) {
+        this(frame, windowTitle, () -> questions);
+    }
+
+    /** A panel that asks the supplier for a new set of questions at the start of every round. */
+    public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource) {
         this.frame = frame;
         this.windowTitle = windowTitle;
-        this.questions = questions;
+        this.questionSource = questionSource;
         setLayout(null); // positioned by doLayout()
 
         // Scrollable text inside the grey question panel.
@@ -407,6 +416,16 @@ public class QuestionPanel extends JPanel {
         saveUsed = false;
         finished = false;
         againButton.setVisible(false);
+        questions = questionSource.get();
+        if (questions == null || questions.length == 0) {
+            finished = true;
+            locked = true;
+            lives = 0;
+            questions = new Question[0];
+            textArea.setText("No questions were found.\n\nCheck that resources/questions/questions.csv is in the project.");
+            refreshControls();
+            return;
+        }
         showQuestion();
     }
 
@@ -426,7 +445,8 @@ public class QuestionPanel extends JPanel {
         Question q = questions[current];
         StringBuilder sb = new StringBuilder(q.getPrompt()).append("\n\n");
         for (int i = 0; i < 4; i++) {
-            sb.append((char) ('A' + i)).append(". ").append(q.getChoice(i)).append("\n");
+            sb.append((char) ('A' + i)).append(". ")
+                    .append(q.getChoice(i).replace("\n", "\n   ")).append("\n");
         }
         if (!note.isEmpty()) {
             sb.append("\n").append(note);
@@ -544,7 +564,7 @@ public class QuestionPanel extends JPanel {
     private void refreshControls() {
         for (int i = 0; i < 4; i++) {
             letterButtons[i].setEnabled(!locked && !finished && !removed[i]);
-            if (!removed[i] && !(locked && i == questions[current].getCorrectIndex() && !finished)) {
+            if (!removed[i] && !(locked && !finished && i == questions[current].getCorrectIndex())) {
                 marks[i].setImage(null);
             }
         }
