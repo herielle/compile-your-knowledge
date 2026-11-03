@@ -11,6 +11,8 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import compileyourknowledge.model.Question;
+import compileyourknowledge.model.QuestionBank;
 import compileyourknowledge.model.SampleQuestions;
 import compileyourknowledge.util.ImageLibrary;
 import compileyourknowledge.util.SoundManager;
@@ -30,6 +32,10 @@ public class MainFrame extends JFrame {
     public static final String CREDITS = "CREDITS";
     public static final String CREDITS_INSPIRATION = "CREDITS_INSPIRATION";
 
+    /** How many questions each difficulty contributes to a mixed Theoretical or Practical round. */
+    private static final int QUESTIONS_PER_DIFFICULTY = 3;
+
+    private final QuestionBank questionBank = QuestionBank.loadDefault();
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
     private boolean fullScreen = false;
@@ -40,9 +46,13 @@ public class MainFrame extends JFrame {
 
         cards.add(new SplashPanel(this), SPLASH);
         cards.add(new PlayPanel(this), START);
-        // Hardcoded question windows for now; the topic grids will come later.
-        cards.add(new QuestionPanel(this, "Theoretical", SampleQuestions.theoretical()), THEORETICAL);
-        cards.add(new QuestionPanel(this, "Practical", SampleQuestions.practical()), PRACTICAL);
+        // Questions come from the CSV and are reshuffled within each difficulty at the start of
+        // every round. Until the topic grids exist, each branch plays a mixed round across its topics.
+        // When a grid button is added, use questionBank.drawTopic("Theoretical", "Logic") for it.
+        cards.add(new QuestionPanel(this, "Theoretical",
+                () -> roundFor("Theoretical", SampleQuestions.theoretical())), THEORETICAL);
+        cards.add(new QuestionPanel(this, "Practical",
+                () -> roundFor("Practical", SampleQuestions.practical())), PRACTICAL);
         
         cards.add(new ScreenPanel(this, "resources/images/HowToPlayScreen.png"), HOW_TO_PLAY);
 
@@ -88,6 +98,12 @@ public class MainFrame extends JFrame {
         showScreen(SPLASH);
         setFullScreen(true); // the game starts in full screen
         SoundManager.playOpening(); // opening sound plays once when the game opens
+    }
+
+    /** A shuffled round from the CSV, or the built-in samples if the CSV has nothing for the branch. */
+    private Question[] roundFor(String branch, Question[] fallback) {
+        Question[] round = questionBank.drawBranch(branch, QUESTIONS_PER_DIFFICULTY);
+        return round.length > 0 ? round : fallback;
     }
 
     /** Switches between a borderless full-screen window and the normal window. */
