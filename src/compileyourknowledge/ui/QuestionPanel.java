@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 
 public class QuestionPanel extends JPanel {
 
@@ -59,7 +60,9 @@ public class QuestionPanel extends JPanel {
     private final String windowTitle;
     /** Called at the start of every round, so each round can come back freshly shuffled. */
     private final Supplier<Question[]> questionSource;
+    private final Consumer<Boolean> roundFinished;
     private Question[] questions = new Question[0];
+    private final int[] choiceOrder = {0, 1, 2, 3};
 
     private final BufferedImage background = ImageLibrary.load("resources/images/background.png");
     private final BufferedImage heartImage = cropToAlpha(ImageLibrary.load("resources/images/heart.png"));
@@ -99,9 +102,14 @@ public class QuestionPanel extends JPanel {
 
     /** A panel that asks the supplier for a new set of questions at the start of every round. */
     public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource) {
+        this(frame, windowTitle, questionSource, won -> {});
+    }
+
+    public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource, Consumer<Boolean> roundFinished) {
         this.frame = frame;
         this.windowTitle = windowTitle;
         this.questionSource = questionSource;
+        this.roundFinished = roundFinished == null ? won -> {} : roundFinished;
         setLayout(null); // positioned by doLayout()
 
         // Scrollable text inside the grey question panel.
@@ -431,6 +439,9 @@ public class QuestionPanel extends JPanel {
 
     private void showQuestion() {
         java.util.Arrays.fill(removed, false);
+        List<Integer> order = new ArrayList<>(List.of(0, 1, 2, 3));
+        Collections.shuffle(order);
+        for (int i = 0; i < 4; i++) choiceOrder[i] = order.get(i);
         locked = false;
         note = "";
         refreshText();
@@ -445,8 +456,9 @@ public class QuestionPanel extends JPanel {
         Question q = questions[current];
         StringBuilder sb = new StringBuilder(q.getPrompt()).append("\n\n");
         for (int i = 0; i < 4; i++) {
+            int original = choiceOrder[i];
             sb.append((char) ('A' + i)).append(". ")
-                    .append(q.getChoice(i).replace("\n", "\n   ")).append("\n");
+                    .append(q.getChoice(original).replace("\n", "\n   ")).append("\n");
         }
         if (!note.isEmpty()) {
             sb.append("\n").append(note);
@@ -461,7 +473,7 @@ public class QuestionPanel extends JPanel {
             return;
         }
         Question q = questions[current];
-        if (choice == q.getCorrectIndex()) {
+        if (choiceOrder[choice] == q.getCorrectIndex()) {
             score += POINTS_PER_LEVEL * q.getDifficulty();
             locked = true;
             marks[choice].setImage(correctImage);
@@ -505,6 +517,7 @@ public class QuestionPanel extends JPanel {
         textArea.setCaretPosition(0);
         againButton.setVisible(true);
         refreshControls();
+        roundFinished.accept(won);
     }
 
     // ------------------------------------------------------------------ lifelines

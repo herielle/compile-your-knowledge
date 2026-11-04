@@ -14,7 +14,7 @@ public class ImageButton extends JButton {
     private static final double PRESSED_SCALE = 0.96;
     private static final double EASE = 0.28; // fraction of the remaining distance covered per tick
 
-    private final BufferedImage source;   // cropped to the button itself
+    private BufferedImage source;   // cropped to the button itself
     private BufferedImage scaled;         // source scaled to the largest size the button can reach
     private int baseWidth;
     private int baseHeight;
@@ -52,6 +52,19 @@ public class ImageButton extends JButton {
                 setTargetScale(1.0);
             }
         });
+    }
+
+
+    /** Replaces the visible image while keeping the same button instance and listeners. */
+    public void setImage(BufferedImage image) {
+        source = cropToContent(image);
+        scaled = null;
+        if (source != null && baseWidth > 0 && baseHeight > 0) {
+            scaled = scaleSmooth(source, (int) Math.round(baseWidth * HOVER_SCALE),
+                    (int) Math.round(baseHeight * HOVER_SCALE));
+            setText("");
+        }
+        repaint();
     }
 
     /** Height divided by width of the cropped button, used by the layout to size it. */
