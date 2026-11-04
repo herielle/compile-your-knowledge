@@ -187,11 +187,18 @@ public final class QuestionBank {
 
     /** Every question of one topic: shuffled within each difficulty, easiest difficulty first. */
     public Question[] drawTopic(String branch, String topic) {
+        return drawTopic(branch, topic, Integer.MAX_VALUE);
+    }
+
+    /** Up to limit questions from one topic, freshly shuffled before every round. */
+    public Question[] drawTopic(String branch, String topic, int limit) {
         List<Question> list = topicList(branch, topic);
-        if (list == null) {
+        if (list == null || limit <= 0) {
             return new Question[0];
         }
-        return arrange(list, Integer.MAX_VALUE);
+        List<Question> copy = new ArrayList<>(list);
+        Collections.shuffle(copy, random);
+        return copy.subList(0, Math.min(limit, copy.size())).toArray(new Question[0]);
     }
 
     /**

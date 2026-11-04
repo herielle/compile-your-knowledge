@@ -1,29 +1,27 @@
 package compileyourknowledge.ui;
 
+import compileyourknowledge.model.Question;
+import compileyourknowledge.model.QuestionBank;
+import compileyourknowledge.util.ImageLibrary;
+import compileyourknowledge.util.SoundManager;
+
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import java.awt.CardLayout;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import compileyourknowledge.model.Question;
-import compileyourknowledge.model.QuestionBank;
-import compileyourknowledge.model.SampleQuestions;
-import compileyourknowledge.util.ImageLibrary;
-import compileyourknowledge.util.SoundManager;
-import java.awt.Cursor;
 import java.awt.Point;
 import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 
-
 public class MainFrame extends JFrame {
-
     public static final String SPLASH = "SPLASH";
     public static final String START = "START";
     public static final String THEORETICAL = "THEORETICAL";
@@ -31,128 +29,104 @@ public class MainFrame extends JFrame {
     public static final String HOW_TO_PLAY = "HOW_TO_PLAY";
     public static final String CREDITS = "CREDITS";
     public static final String CREDITS_INSPIRATION = "CREDITS_INSPIRATION";
+    public static final String QUESTION = "QUESTION";
 
-    /** How many questions each difficulty contributes to a mixed Theoretical or Practical round. */
-    private static final int QUESTIONS_PER_DIFFICULTY = 3;
+    private static final int QUESTIONS_PER_STAGE = 10;
 
     private final QuestionBank questionBank = QuestionBank.loadDefault();
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
+    private final boolean[] theoreticalUnlocked = new boolean[8];
+    private TopicPanel theoreticalPanel;
+    private TopicPanel practicalPanel;
+    private QuestionPanel questionPanel;
     private boolean fullScreen = false;
 
     public MainFrame() {
         super("Compile Your Knowledge");
+        theoreticalUnlocked[0] = true;
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         cards.add(new SplashPanel(this), SPLASH);
         cards.add(new PlayPanel(this), START);
-        // Questions come from the CSV and are reshuffled within each difficulty at the start of
-        // every round. Until the topic grids exist, each branch plays a mixed round across its topics.
-        // When a grid button is added, use questionBank.drawTopic("Theoretical", "Logic") for it.
-        cards.add(new QuestionPanel(this, "Theoretical",
-                () -> roundFor("Theoretical", SampleQuestions.theoretical())), THEORETICAL);
-        cards.add(new QuestionPanel(this, "Practical",
-                () -> roundFor("Practical", SampleQuestions.practical())), PRACTICAL);
-        
+        theoreticalPanel = new TopicPanel(this, "Theoretical", true, questionBank);
+        practicalPanel = new TopicPanel(this, "Practical", false, questionBank);
+        cards.add(theoreticalPanel, THEORETICAL);
+        cards.add(practicalPanel, PRACTICAL);
+        cards.add(new QuestionPanel(this, "Question", () -> new Question[0]), QUESTION);
         cards.add(new ScreenPanel(this, "resources/images/HowToPlayScreen.png"), HOW_TO_PLAY);
 
-        // Credits has two pages: Developers (right arrow) and Inspiration/References (left arrow).
         ScreenPanel developers = new ScreenPanel(this, "resources/images/CreditsDevelopers.png");
-        developers.addHotspot(1726, 662, 151, 151, "Next",
-                () -> showScreen(CREDITS_INSPIRATION));
+        developers.addHotspot(1726, 662, 151, 151, "Next", () -> showScreen(CREDITS_INSPIRATION));
         ScreenPanel inspiration = new ScreenPanel(this, "resources/images/CreditsInspiration.png");
-        inspiration.addHotspot(123, 662, 151, 151, "Previous",
-                () -> showScreen(CREDITS));
+        inspiration.addHotspot(123, 662, 151, 151, "Previous", () -> showScreen(CREDITS));
         cards.add(developers, CREDITS);
         cards.add(inspiration, CREDITS_INSPIRATION);
 
-        cards.setPreferredSize(new Dimension(1000, 707)); // same proportions as the 2000x1414 artwork
+        cards.setPreferredSize(new Dimension(1000, 707));
         setContentPane(cards);
-        
-        applyCustomCursor(); 
+        applyCustomCursor();
         pack();
-       
         setResizable(false);
-        setLocationRelativeTo(null); // center on screen
+        setLocationRelativeTo(null);
 
-        // F11 toggles full screen, Esc leaves it.
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleFullScreen");
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleFullScreen");
         getRootPane().getActionMap().put("toggleFullScreen", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                setFullScreen(!fullScreen);
-            }
+            @Override public void actionPerformed(ActionEvent e) { setFullScreen(!fullScreen); }
         });
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "leaveFullScreen");
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "leaveFullScreen");
         getRootPane().getActionMap().put("leaveFullScreen", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (fullScreen) {
-                    setFullScreen(false);
-                }
-            }
+            @Override public void actionPerformed(ActionEvent e) { if (fullScreen) setFullScreen(false); }
         });
 
         showScreen(SPLASH);
-        setFullScreen(true); // the game starts in full screen
-        SoundManager.playOpening(); // opening sound plays once when the game opens
+        setFullScreen(true);
+        SoundManager.playOpening();
     }
 
-    /** A shuffled round from the CSV, or the built-in samples if the CSV has nothing for the branch. */
-    private Question[] roundFor(String branch, Question[] fallback) {
-        Question[] round = questionBank.drawBranch(branch, QUESTIONS_PER_DIFFICULTY);
-        return round.length > 0 ? round : fallback;
+    public boolean isTheoreticalUnlocked(int index) {
+        return index >= 0 && index < theoreticalUnlocked.length && theoreticalUnlocked[index];
     }
 
-    /** Switches between a borderless full-screen window and the normal window. */
+    /** Starts one lesson/language stage. Each round asks up to 10 randomly selected questions. */
+    public void startTopic(String branch, String topic) {
+        int topicIndex = questionBank.topics(branch).indexOf(topic);
+        questionPanel = new QuestionPanel(this, branch + " - " + topic,
+                () -> questionBank.drawTopic(branch, topic, QUESTIONS_PER_STAGE),
+                won -> {
+                    if (won && branch.equalsIgnoreCase("Theoretical") && topicIndex >= 0
+                            && topicIndex + 1 < theoreticalUnlocked.length) {
+                        theoreticalUnlocked[topicIndex + 1] = true;
+                    }
+                    theoreticalPanel.refreshLocks();
+                });
+        cards.add(questionPanel, QUESTION);
+        showScreen(QUESTION);
+    }
+
+    public void showScreen(String name) {
+        if (THEORETICAL.equals(name)) theoreticalPanel.refreshLocks();
+        cardLayout.show(cards, name);
+    }
+
     public void setFullScreen(boolean on) {
         GraphicsDevice device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         fullScreen = on;
         if (on) {
-            dispose(); // a window must be closed before its title bar can be removed
-            setUndecorated(true);
-            
-            if (device.isFullScreenSupported()) {
-                device.setFullScreenWindow(this);
-            } else {
-                setExtendedState(MAXIMIZED_BOTH);
-                setVisible(true);
-            }
+            dispose(); setUndecorated(true);
+            if (device.isFullScreenSupported()) device.setFullScreenWindow(this);
+            else { setExtendedState(MAXIMIZED_BOTH); setVisible(true); }
         } else {
-            if (device.getFullScreenWindow() == this) {
-                device.setFullScreenWindow(null);
-            }
-            dispose();
-            setUndecorated(false);
-            
-            setExtendedState(NORMAL);
-            pack();
-           
-            setLocationRelativeTo(null);
-            setVisible(true);
+            if (device.getFullScreenWindow() == this) device.setFullScreenWindow(null);
+            dispose(); setUndecorated(false); setExtendedState(NORMAL); pack(); setLocationRelativeTo(null); setVisible(true);
         }
-        
-        requestFocus();
-        applyCustomCursor();
-    }
-
-    /** Switches to the card registered under the given name. */
-    public void showScreen(String name) {
-        cardLayout.show(cards, name);
+        requestFocus(); applyCustomCursor();
     }
 
     private void applyCustomCursor() {
         BufferedImage img = ImageLibrary.load("resources/images/cursor.png");
-            if (img == null) {
-                return; // fall back to the default cursor
-            }
-        
+        if (img == null) return;
         Cursor custom = Toolkit.getDefaultToolkit().createCustomCursor(img, new Point(0, 0), "custom");
-        setCursor(custom);
-        cards.setCursor(custom);    
+        setCursor(custom); cards.setCursor(custom);
     }
-
-    
 }
