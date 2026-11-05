@@ -10,6 +10,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.Color;
 import java.awt.Font;
@@ -17,10 +18,17 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.Supplier;
 
 public class QuestionPanel extends JPanel {
@@ -50,11 +58,21 @@ public class QuestionPanel extends JPanel {
     private static final double PADDING = 0.12; // room around image buttons for the hover grow
 
     // ---- game rules ---------------------------------------------------------------
-    /** The proposal allows one lifeline per game. Set to false to allow each one once. */
-    private static final boolean ONE_LIFELINE_PER_GAME = true;
+    // Peek and Copy can each be used once per game (independently of each other).
+    // Save is not limited: it can be used any time the player still has hearts.
     private static final int MAX_LIVES = 3;
     private static final int POINTS_PER_LEVEL = 100;
     private static final int NEXT_QUESTION_DELAY_MS = 900;
+
+    // Pop-up dialog (Save / Saved / Game Over / You Win), in artwork units.
+    private static final double[] DLG = {588, 470, 1120, 660};   // x, y, w, h
+    private static final double DLG_BTN_W = 440;
+    private static final double DLG_BTN_H = 96;
+    private static final double DLG_BTN_Y = 940;
+
+    /** Saved checkpoint scores live here, one entry per topic, so they survive closing the game. */
+    private static final File SAVE_FILE =
+            new File(System.getProperty("user.home"), ".compileyourknowledge/save.properties");
 
     private final MainFrame frame;
     private String windowTitle;
@@ -80,17 +98,14 @@ public class QuestionPanel extends JPanel {
     private final ImageButton copyButton;
     private final ImageButton saveButton;
     private final JButton closeButton = new JButton();
-    private final JButton againButton = new JButton("Start Again");
+    private final DialogOverlay overlay = new DialogOverlay();
 
     // Round state.
     private int current;
     private int lives;
     private int score;
-    private int savedScore;      // -1 means nothing saved yet
-    private boolean lifelineUsed;
     private boolean peekUsed;
     private boolean copyUsed;
-    private boolean saveUsed;
     private boolean locked;      // true while the correct mark shows, and after the round ends
     private boolean finished;
     private String note = "";    // short status line shown under the choices (hint, Copy, Save)
@@ -152,17 +167,13 @@ public class QuestionPanel extends JPanel {
         closeButton.setToolTipText("Back to menu");
         closeButton.addActionListener(e -> leave());
 
-        againButton.setFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
-        againButton.addActionListener(e -> startRound());
-        againButton.setVisible(false);
-
         // Add order is paint order top to bottom: hearts and marks sit above everything else.
+        add(overlay);   // the pop-up dialog sits above everything and blocks clicks to what is below
         add(heartsOverlay);
         for (Mark m : marks) {
             add(m);
         }
         add(closeButton);
-        add(againButton);
         for (ImageButton b : letterButtons) {
             add(b);
         }
@@ -185,12 +196,40 @@ public class QuestionPanel extends JPanel {
         this.backScreen = backScreen;
         this.onWin = onWin;
         startRound();
+        offerResume();
+    }
+
+    /** If this topic has a saved game, asks whether to continue it; "No" throws the save away. */
+    private void offerResume() {
+        Saved saved = readSave();
+        if (saved == null) {
+            return;
+        }
+        overlay.show(new String[]{"Continue your", "saved game?"}, null, saved.score,
+                new String[]{"Yes", "No"},
+                new Runnable[]{() -> { overlay.close(); applySave(saved); },
+                               () -> { clearSave(); overlay.close(); refreshControls(); }});
+    }
+
+    private void applySave(Saved saved) {
+        if (nextTimer != null) {
+            nextTimer.stop();
+        }
+        questions = saved.questions;
+        current = saved.current;
+        lives = saved.lives;
+        score = saved.score;
+        peekUsed = saved.peek;
+        copyUsed = saved.copy;
+        finished = false;
+        showQuestion();
     }
 
     private void leave() {
         if (nextTimer != null) {
             nextTimer.stop(); // never let a pending "next question" fire after the window is closed
         }
+        overlay.close();
         if (frame != null) {
             frame.showScreen(backScreen);
         }
@@ -245,9 +284,7 @@ public class QuestionPanel extends JPanel {
             placeImageButton(lifelines[i], r[0], r[1], r[2], r[3], false);
         }
 
-        int aw = sl(420);
-        int ah = sl(90);
-        againButton.setBounds(sx(ART_W / 2) - aw / 2, sy(1010) - ah / 2, aw, ah);
+        overlay.setBounds(0, 0, getWidth(), getHeight());
     }
 
     /** Places a button so its visible image fills the given artwork rectangle. */
@@ -426,13 +463,10 @@ public class QuestionPanel extends JPanel {
         current = 0;
         lives = MAX_LIVES;
         score = 0;
-        savedScore = -1;
-        lifelineUsed = false;
         peekUsed = false;
         copyUsed = false;
-        saveUsed = false;
         finished = false;
-        againButton.setVisible(false);
+        overlay.close();
         questions = questionSource.get();
         if (questions == null || questions.length == 0) {
             finished = true;
@@ -474,7 +508,7 @@ public class QuestionPanel extends JPanel {
     }
 
     private void onAnswer(int choice) {
-        if (locked || finished || removed[choice]) {
+        if (locked || finished || removed[choice] || overlay.isVisible()) {
             return;
         }
         Question q = questions[current];
@@ -510,29 +544,38 @@ public class QuestionPanel extends JPanel {
     private void endRound(boolean won) {
         finished = true;
         locked = true;
-        String result;
+        clearSave();   // a finished round has nothing left to resume
+        refreshControls();
         if (won) {
             String unlocked = onWin == null ? null : onWin.get();
-            result = "VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score
-                    + (unlocked == null ? "" : "\n\n" + unlocked);
+            textArea.setText("VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score
+                    + (unlocked == null ? "" : "\n\n" + unlocked));
+            textArea.setCaretPosition(0);
+            overlay.show(new String[]{"You Win!"}, unlocked, score,
+                    new String[]{"Start Again", "Exit"},
+                    new Runnable[]{this::startRound, () -> System.exit(0)});
         } else {
-            result = "GAME OVER\n\nYou ran out of hearts.\n\nScore: " + score
-                    + (savedScore >= 0 ? "\nSaved checkpoint: " + savedScore : "")
-                    + "\nFinal score: " + Math.max(score, savedScore);
+            int finalScore = score;
+            textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nScore: " + score
+                    + "\nFinal score: " + finalScore);
+            textArea.setCaretPosition(0);
+            overlay.show(new String[]{"GAME OVER!"}, null, finalScore,
+                    new String[]{"Start Again", "Exit"},
+                    new Runnable[]{this::startRound, () -> System.exit(0)});
         }
-        textArea.setText(result);
-        textArea.setCaretPosition(0);
-        againButton.setVisible(true);
-        refreshControls();
+        repaint();
     }
 
     // ------------------------------------------------------------------ lifelines
 
+    /** Peek and Copy: usable once each per game, and only while a question is open. */
     private boolean lifelineAvailable(boolean thisOneUsed) {
-        if (finished || locked || thisOneUsed) {
-            return false;
-        }
-        return !(ONE_LIFELINE_PER_GAME && lifelineUsed);
+        return !(finished || locked || thisOneUsed || overlay.isVisible());
+    }
+
+    /** Save is never used up: it works any time the round is still going (the player still has hearts). */
+    private boolean saveAvailable() {
+        return !finished && !locked && lives > 0 && !overlay.isVisible();
     }
 
     private void usePeek() {
@@ -540,7 +583,6 @@ public class QuestionPanel extends JPanel {
             return;
         }
         peekUsed = true;
-        lifelineUsed = true;
         note = "Hint: " + questions[current].getHint();
         refreshText();
         refreshControls();
@@ -551,7 +593,6 @@ public class QuestionPanel extends JPanel {
             return;
         }
         copyUsed = true;
-        lifelineUsed = true;
         List<Integer> wrong = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
             if (i != questions[current].getCorrectIndex() && !removed[i]) {
@@ -566,16 +607,287 @@ public class QuestionPanel extends JPanel {
         refreshControls();
     }
 
+    /** Figure 2.3f: asks first; "Yes" banks the score (Figure 2.3g), "No" goes back to the question. */
     private void useSave() {
-        if (!lifelineAvailable(saveUsed)) {
+        if (!saveAvailable()) {
             return;
         }
-        saveUsed = true;
-        lifelineUsed = true;
-        savedScore = score;
-        note = "Score of " + score + " saved as a checkpoint.";
-        refreshText();
-        refreshControls();
+        overlay.show(new String[]{"Do you want to save", "your Score?"}, null, score,
+                new String[]{"Yes", "No"},
+                new Runnable[]{this::confirmSave, () -> { overlay.close(); refreshControls(); }});
+    }
+
+    private void confirmSave() {
+        writeSave();
+        overlay.show(new String[]{"Current Score", "Saved!"}, null, -1,
+                new String[]{"Back to Main Menu", "Exit"},
+                new Runnable[]{this::backToMainMenu, () -> System.exit(0)});
+    }
+
+    private void backToMainMenu() {
+        if (nextTimer != null) {
+            nextTimer.stop();
+        }
+        overlay.close();
+        if (frame != null) {
+            frame.showScreen(MainFrame.SPLASH);
+        }
+    }
+
+    // ------------------------------------------------------------------ saved game (on disk)
+
+    /** Everything needed to carry on a round later, including the exact questions that were drawn. */
+    private static final class Saved {
+        int score;
+        int current;
+        int lives;
+        boolean peek;
+        boolean copy;
+        Question[] questions;
+    }
+
+    private Properties loadProps() {
+        Properties props = new Properties();
+        if (SAVE_FILE.exists()) {
+            try (FileInputStream in = new FileInputStream(SAVE_FILE)) {
+                props.load(in);
+            } catch (IOException e) {
+                System.err.println("Could not read save file: " + e);
+            }
+        }
+        return props;
+    }
+
+    private void storeProps(Properties props) {
+        try {
+            File dir = SAVE_FILE.getParentFile();
+            if (dir != null) {
+                dir.mkdirs();
+            }
+            try (FileOutputStream out = new FileOutputStream(SAVE_FILE)) {
+                props.store(out, "Compile Your Knowledge - saved games");
+            }
+        } catch (IOException e) {
+            System.err.println("Could not write save file: " + e);
+        }
+    }
+
+    private String saveKey(String name) {
+        return windowTitle + "|" + name;
+    }
+
+    /** Saves the round as it stands at the start of the current question. */
+    private void writeSave() {
+        Properties props = loadProps();
+        props.entrySet().removeIf(e -> String.valueOf(e.getKey()).startsWith(saveKey("")));
+        props.setProperty(saveKey("score"), String.valueOf(score));
+        props.setProperty(saveKey("current"), String.valueOf(current));
+        props.setProperty(saveKey("lives"), String.valueOf(lives));
+        props.setProperty(saveKey("peek"), String.valueOf(peekUsed));
+        props.setProperty(saveKey("copy"), String.valueOf(copyUsed));
+        props.setProperty(saveKey("count"), String.valueOf(questions.length));
+        for (int i = 0; i < questions.length; i++) {
+            Question q = questions[i];
+            String k = "q" + i + ".";
+            props.setProperty(saveKey(k + "topic"), q.getTopic() == null ? "" : q.getTopic());
+            props.setProperty(saveKey(k + "difficulty"), String.valueOf(q.getDifficulty()));
+            props.setProperty(saveKey(k + "prompt"), q.getPrompt());
+            for (int c = 0; c < 4; c++) {
+                props.setProperty(saveKey(k + "choice" + c), q.getChoice(c));
+            }
+            props.setProperty(saveKey(k + "correct"), String.valueOf(q.getCorrectIndex()));
+            props.setProperty(saveKey(k + "hint"), q.getHint() == null ? "" : q.getHint());
+        }
+        storeProps(props);
+    }
+
+    /** The saved game for the current topic, or null if there is none (or it cannot be read). */
+    private Saved readSave() {
+        Properties props = loadProps();
+        if (props.getProperty(saveKey("count")) == null) {
+            return null;
+        }
+        try {
+            Saved saved = new Saved();
+            saved.score = Integer.parseInt(props.getProperty(saveKey("score")));
+            saved.current = Integer.parseInt(props.getProperty(saveKey("current")));
+            saved.lives = Integer.parseInt(props.getProperty(saveKey("lives")));
+            saved.peek = Boolean.parseBoolean(props.getProperty(saveKey("peek")));
+            saved.copy = Boolean.parseBoolean(props.getProperty(saveKey("copy")));
+            int count = Integer.parseInt(props.getProperty(saveKey("count")));
+            saved.questions = new Question[count];
+            for (int i = 0; i < count; i++) {
+                String k = "q" + i + ".";
+                String[] choices = new String[4];
+                for (int c = 0; c < 4; c++) {
+                    choices[c] = props.getProperty(saveKey(k + "choice" + c));
+                }
+                saved.questions[i] = new Question(
+                        props.getProperty(saveKey(k + "topic")),
+                        Integer.parseInt(props.getProperty(saveKey(k + "difficulty"))),
+                        props.getProperty(saveKey(k + "prompt")),
+                        choices,
+                        Integer.parseInt(props.getProperty(saveKey(k + "correct"))),
+                        props.getProperty(saveKey(k + "hint")));
+            }
+            if (count == 0 || saved.current < 0 || saved.current >= count || saved.lives <= 0) {
+                return null;
+            }
+            return saved;
+        } catch (RuntimeException e) {   // missing key, bad number, null choice: treat as no save
+            return null;
+        }
+    }
+
+    private void clearSave() {
+        Properties props = loadProps();
+        if (props.entrySet().removeIf(e -> String.valueOf(e.getKey()).startsWith(saveKey("")))) {
+            storeProps(props);
+        }
+    }
+
+    // ------------------------------------------------------------------ pop-up dialog
+
+    /**
+     * The retro pop-up from the mockups: a dimmed window behind a grey dialog with a blue title bar,
+     * one or two message lines, an optional SCORE box and two buttons. It covers the whole panel so
+     * nothing underneath can be clicked while it is open.
+     */
+    private class DialogOverlay extends JComponent {
+        private String[] lines = {};
+        private String extra;
+        private int shownScore = -1;     // -1 hides the SCORE box
+        private String[] labels = {};
+        private Runnable[] actions = {};
+        private int hover = -1;
+
+        DialogOverlay() {
+            setVisible(false);
+            MouseAdapter mouse = new MouseAdapter() {
+                @Override
+                public void mouseMoved(MouseEvent e) {
+                    setHover(hit(e.getX(), e.getY()));
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setHover(-1);
+                }
+
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    int h = hit(e.getX(), e.getY());
+                    if (h >= 0 && SwingUtilities.isLeftMouseButton(e)) {
+                        actions[h].run();
+                    }
+                }
+            };
+            addMouseListener(mouse);
+            addMouseMotionListener(mouse);
+        }
+
+        void show(String[] lines, String extra, int score, String[] labels, Runnable[] actions) {
+            this.lines = lines;
+            this.extra = extra;
+            this.shownScore = score;
+            this.labels = labels;
+            this.actions = actions;
+            this.hover = -1;
+            setVisible(true);
+            repaint();
+        }
+
+        void close() {
+            setVisible(false);
+            hover = -1;
+            QuestionPanel.this.repaint();
+        }
+
+        private void setHover(int h) {
+            if (h != hover) {
+                hover = h;
+                repaint();
+            }
+        }
+
+        private int[] buttonRect(int i) {
+            double cx = DLG[0] + DLG[2] * (2 * i + 1) / (2.0 * labels.length);
+            return new int[]{sx(cx - DLG_BTN_W / 2), sy(DLG_BTN_Y), sl(DLG_BTN_W), sl(DLG_BTN_H)};
+        }
+
+        private int hit(int x, int y) {
+            for (int i = 0; i < labels.length; i++) {
+                int[] r = buttonRect(i);
+                if (x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            g2.setColor(new Color(0, 0, 0, 120));              // dim the window behind
+            g2.fillRect(0, 0, getWidth(), getHeight());
+
+            Color grey = new Color(192, 192, 192);
+            boxArt(g2, DLG[0], DLG[1], DLG[2], DLG[3], 6, grey);
+            fillArt(g2, DLG[0] + 6, DLG[1] + 6, DLG[2] - 12, 110, new Color(0, 0, 205));   // blue bar
+            fillArt(g2, DLG[0] + 6, DLG[1] + 116, DLG[2] - 12, 30, new Color(224, 224, 224));
+
+            // Message block, centred in the space between the title bar and the buttons.
+            double lineH = 88;
+            double extraH = extra == null ? 0 : 64;
+            double scoreH = shownScore < 0 ? 0 : 110;
+            double block = lines.length * lineH + extraH + scoreH;
+            double y = 620 + (320 - block) / 2;
+            double cx = DLG[0] + DLG[2] / 2;
+
+            g2.setColor(Color.BLACK);
+            g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(14, sl(lines.length == 1 ? 80 : 62))));
+            for (String line : lines) {
+                drawCentered(g2, line, cx, y + lineH * 0.7);
+                y += lineH;
+            }
+            if (extra != null) {
+                g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, sl(36))));
+                drawCentered(g2, extra, cx, y + 40);
+                y += extraH;
+            }
+            if (shownScore >= 0) {
+                y += 20;
+                boxArt(g2, cx - 190, y, 380, 66, 4, Color.WHITE);
+                g2.setColor(Color.BLACK);
+                g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, sl(36))));
+                drawCentered(g2, "SCORE : " + shownScore, cx, y + 46);
+            }
+
+            // Buttons.
+            g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, sl(40))));
+            for (int i = 0; i < labels.length; i++) {
+                int[] r = buttonRect(i);
+                int b = Math.max(2, sl(5));
+                g2.setColor(Color.BLACK);
+                g2.fillRect(r[0], r[1], r[2], r[3]);
+                g2.setColor(i == hover ? new Color(225, 225, 225) : new Color(205, 205, 205));
+                g2.fillRect(r[0] + b, r[1] + b, r[2] - 2 * b, r[3] - 2 * b);
+                g2.setColor(Color.WHITE);                                       // bevel highlight
+                g2.fillRect(r[0] + b, r[1] + b, r[2] - 2 * b, Math.max(1, b / 2));
+                g2.setColor(Color.BLACK);
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(labels[i], r[0] + (r[2] - fm.stringWidth(labels[i])) / 2,
+                        r[1] + (r[3] + fm.getAscent() - fm.getDescent()) / 2);
+            }
+            g2.dispose();
+        }
+
+        private void drawCentered(Graphics2D g2, String text, double artCx, double artBaseline) {
+            FontMetrics fm = g2.getFontMetrics();
+            g2.drawString(text, sx(artCx) - fm.stringWidth(text) / 2, sy(artBaseline));
+        }
     }
 
     // ------------------------------------------------------------------ view helpers
@@ -589,7 +901,7 @@ public class QuestionPanel extends JPanel {
         }
         peekButton.setEnabled(lifelineAvailable(peekUsed));
         copyButton.setEnabled(lifelineAvailable(copyUsed));
-        saveButton.setEnabled(lifelineAvailable(saveUsed));
+        saveButton.setEnabled(saveAvailable());
         repaint();
     }
 }
