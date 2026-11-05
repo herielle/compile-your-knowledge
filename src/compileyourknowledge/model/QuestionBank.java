@@ -185,20 +185,91 @@ public final class QuestionBank {
 
     // ------------------------------------------------------------------ drawing rounds
 
-    /** Every question of one topic: shuffled within each difficulty, easiest difficulty first. */
+    /** Every question of one topic: easiest difficulty first, shuffled inside each difficulty. */
     public Question[] drawTopic(String branch, String topic) {
         return drawTopic(branch, topic, Integer.MAX_VALUE);
     }
 
-    /** Up to limit questions from one topic, freshly shuffled before every round. */
+    /** Same as {@link #drawStage}; kept so older code that calls drawTopic(branch, topic, limit) still works. */
     public Question[] drawTopic(String branch, String topic, int limit) {
+        return drawStage(branch, topic, limit);
+    }
+
+    /**
+     * One stage of the game: up to {@code count} questions from a single topic, always ordered
+     * easy -> medium -> hard (by the CSV "difficulty" column: 1 = easy, 2 = medium, 3 = hard).
+     *
+     * Randomness only happens INSIDE a difficulty: all easy questions are shuffled and a few are picked,
+     * then the same for medium, then hard. The tiers are never mixed together, so the game always knows
+     * which questions are easy and which are hard and the stage gets harder as it goes.
+     *
+     * When a topic has more questions than {@code count} (C, Java, ...), the stage takes an even share
+     * from each tier with the easiest tier getting any leftover (10 questions over 3 tiers = 4 easy,
+     * 3 medium, 3 hard). If a tier does not have enough questions, the missing ones come from the
+     * nearest tier that has some to spare. A topic with {@code count} questions or fewer is asked in full.
+     * The four choices of every question are shuffled as well.
+     */
+    public Question[] drawStage(String branch, String topic, int count) {
         List<Question> list = topicList(branch, topic);
-        if (list == null || limit <= 0) {
+        if (list == null || count <= 0) {
             return new Question[0];
         }
-        List<Question> copy = new ArrayList<>(list);
-        Collections.shuffle(copy, random);
-        return copy.subList(0, Math.min(limit, copy.size())).toArray(new Question[0]);
+
+        Map<Integer, List<Question>> tiers = new TreeMap<>();   // ascending: easiest tier first
+        for (Question q : list) {
+            tiers.computeIfAbsent(q.getDifficulty(), k -> new ArrayList<>()).add(q);
+        }
+        List<List<Question>> byTier = new ArrayList<>(tiers.values());
+        int[] quota = tierQuotas(byTier, count);
+
+        List<Question> round = new ArrayList<>();
+        for (int t = 0; t < byTier.size(); t++) {
+            List<Question> copy = new ArrayList<>(byTier.get(t));
+            Collections.shuffle(copy, random);
+            for (Question q : copy.subList(0, quota[t])) {
+                round.add(q.shuffled(random));
+            }
+        }
+        return round.toArray(new Question[0]);
+    }
+
+    /** How many questions to take from each tier (index 0 = easiest). */
+    private static int[] tierQuotas(List<List<Question>> byTier, int count) {
+        int tiers = byTier.size();
+        int[] quota = new int[tiers];
+        int total = 0;
+        for (List<Question> tier : byTier) {
+            total += tier.size();
+        }
+        if (total <= count) {                       // small topic: ask everything
+            for (int t = 0; t < tiers; t++) {
+                quota[t] = byTier.get(t).size();
+            }
+            return quota;
+        }
+        for (int t = 0; t < tiers; t++) {           // even share, leftovers go to the easiest tiers
+            quota[t] = count / tiers + (t < count % tiers ? 1 : 0);
+        }
+        for (int t = 0; t < tiers; t++) {           // move any shortfall to the nearest tier with spare room
+            int missing = quota[t] - byTier.get(t).size();
+            if (missing <= 0) {
+                continue;
+            }
+            quota[t] -= missing;
+            for (int d = 1; d < tiers && missing > 0; d++) {
+                for (int j : new int[]{t + d, t - d}) {
+                    if (j >= 0 && j < tiers && missing > 0) {
+                        int spare = byTier.get(j).size() - quota[j];
+                        int give = Math.min(spare, missing);
+                        if (give > 0) {
+                            quota[j] += give;
+                            missing -= give;
+                        }
+                    }
+                }
+            }
+        }
+        return quota;
     }
 
     /**
@@ -226,7 +297,9 @@ public final class QuestionBank {
         for (List<Question> tier : tiers.values()) {
             List<Question> copy = new ArrayList<>(tier);
             Collections.shuffle(copy, random);
-            round.addAll(copy.subList(0, Math.min(perDifficulty, copy.size())));
+            for (Question q : copy.subList(0, Math.min(perDifficulty, copy.size()))) {
+                round.add(q.shuffled(random));
+            }
         }
         return round.toArray(new Question[0]);
     }

@@ -1,5 +1,9 @@
 package compileyourknowledge.model;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Random;
+
 /** One multiple-choice question. Answers are always four choices (A to D). */
 public class Question {
 
@@ -28,4 +32,19 @@ public class Question {
     public String getChoice(int i) { return choices[i]; }
     public int getCorrectIndex() { return correctIndex; }
     public String getHint() { return hint; }
+
+    /** A copy of this question with the four choices in a random order; the correct index follows its answer. */
+    public Question shuffled(Random random) {
+        Integer[] order = {0, 1, 2, 3};
+        Collections.shuffle(Arrays.asList(order), random);
+        String[] mixed = new String[4];
+        int newCorrect = 0;
+        for (int i = 0; i < 4; i++) {
+            mixed[i] = choices[order[i]];
+            if (order[i] == correctIndex) {
+                newCorrect = i;
+            }
+        }
+        return new Question(topic, difficulty, prompt, mixed, newCorrect, hint);
+    }
 }

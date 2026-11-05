@@ -140,47 +140,62 @@ public class ImageButton extends JButton {
     }
 
     
+    // Cropped versions of images already processed (keyed by the image object itself), so a picture
+    // used again, such as a lock button redrawn on every visit, is never re-scanned pixel by pixel.
+    private static final java.util.Map<BufferedImage, BufferedImage> CROP_CACHE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** Crops a button picture ahead of time so building the button later is instant. Safe to call from any thread. */
+    public static void prepare(BufferedImage img) {
+        cropToContent(img);
+    }
+
     private static BufferedImage cropToContent(BufferedImage img) {
         if (img == null) {
             return null;
         }
-        int minX = img.getWidth();
-        int minY = img.getHeight();
-        
+        BufferedImage cached = CROP_CACHE.get(img);
+        if (cached != null) {
+            return cached;
+        }
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int[] px = img.getRGB(0, 0, w, h, null, 0, w); // one bulk read instead of w*h getRGB calls
+        int minX = w;
+        int minY = h;
         int maxX = -1;
         int maxY = -1;
-        for (int y = 0; y < img.getHeight(); y++) {
-            for (int x = 0; x < img.getWidth(); x++) {
-                int argb = img.getRGB(x, y);
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            for (int x = 0; x < w; x++) {
+                int argb = px[row + x];
                 int alpha = (argb >>> 24) & 0xFF;
-               
                 int r = (argb >> 16) & 0xFF;
                 int gr = (argb >> 8) & 0xFF;
-               
                 int b = argb & 0xFF;
                 boolean visible = alpha > 10 && (r + gr + b) < 720; // not transparent, not near-white
                 if (visible) {
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
                 }
             }
         }
+        BufferedImage result;
         if (maxX < minX || maxY < minY) {
-            return img;
+            result = img;
+        } else {
+            result = new BufferedImage(maxX - minX + 1, maxY - minY + 1, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = result.createGraphics();
+            g2.drawImage(img, 0, 0, result.getWidth(), result.getHeight(),
+                    minX, minY, maxX + 1, maxY + 1, null);
+            g2.dispose();
         }
-        BufferedImage out = new BufferedImage(maxX - minX + 1, maxY - minY + 1, BufferedImage.TYPE_INT_ARGB);
-       
-        Graphics2D g2 = out.createGraphics();
-        g2.drawImage(img, 0, 0, out.getWidth(), out.getHeight(),
-                minX, minY, maxX + 1, maxY + 1, null);
-        
-                g2.dispose();
-        return out;
+        CROP_CACHE.put(img, result);
+        return result;
     }
 
-   
     private static BufferedImage scaleSmooth(BufferedImage img, int targetW, int targetH) {
         BufferedImage current = img;
         int w = img.getWidth();
