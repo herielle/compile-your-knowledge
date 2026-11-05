@@ -1,5 +1,6 @@
 package compileyourknowledge.ui;
 
+import compileyourknowledge.util.Backdrop;
 import compileyourknowledge.util.ImageLibrary;
 import compileyourknowledge.util.SoundManager;
 
@@ -16,7 +17,7 @@ import java.awt.image.BufferedImage;
 public class SplashPanel extends JPanel {
 
     // Swap this for resources/images/SplashScreen.png if you want the version with the stars.
-    private static final String SPLASH_IMAGE = "resources/images/MainScreen.png";
+    private static final String SPLASH_IMAGE = "resources/images/screens/MainScreen.png";
     private static final String TITLE = "Compile Your Knowledge";
 
   
@@ -92,13 +93,7 @@ public class SplashPanel extends JPanel {
         int h = getHeight();
 
         if (background != null) {
-            // Scale the picture to cover the whole panel while keeping its proportions.
-            double scale = Math.max((double) w / background.getWidth(), (double) h / background.getHeight());
-            
-            int drawW = (int) Math.round(background.getWidth() * scale);
-            int drawH = (int) Math.round(background.getHeight() * scale);
-            
-            g2.drawImage(background, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH, null);
+            Backdrop.paint(g2, background, w, h);
         } else {
             // Fallback so the title still shows if the picture is missing.
             Theme.paintSky(g2, w, h);

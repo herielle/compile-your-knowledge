@@ -1,5 +1,6 @@
 package compileyourknowledge.ui;
 
+import compileyourknowledge.util.Backdrop;
 import compileyourknowledge.util.ImageLibrary;
 
 import javax.swing.JButton;
@@ -11,7 +12,7 @@ import java.awt.image.BufferedImage;
 
 public class PlayPanel extends JPanel {
 
-    private static final String PLAY_IMAGE = "resources/images/PlayScreen.png";
+    private static final String PLAY_IMAGE = "resources/images/screens/PlayScreen.png";
 
     private static final double ART_W = 2000;
     private static final double ART_H = 1414;
@@ -95,10 +96,7 @@ public class PlayPanel extends JPanel {
         int h = getHeight();
 
         if (background != null) {
-            double scale = Math.max((double) w / background.getWidth(), (double) h / background.getHeight());
-            int drawW = (int) Math.round(background.getWidth() * scale);
-            int drawH = (int) Math.round(background.getHeight() * scale);
-            g2.drawImage(background, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH, null);
+            Backdrop.paint(g2, background, w, h);
         } else {
             Theme.paintSky(g2, w, h);
         }

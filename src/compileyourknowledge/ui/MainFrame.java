@@ -20,6 +20,7 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
+import java.util.function.Supplier;
 
 public class MainFrame extends JFrame {
     public static final String SPLASH = "SPLASH";
@@ -44,6 +45,7 @@ public class MainFrame extends JFrame {
 
     public MainFrame() {
         super("Compile Your Knowledge");
+        preloadArt();
         theoreticalUnlocked[0] = true;
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
@@ -53,12 +55,14 @@ public class MainFrame extends JFrame {
         practicalPanel = new TopicPanel(this, "Practical", false, questionBank);
         cards.add(theoreticalPanel, THEORETICAL);
         cards.add(practicalPanel, PRACTICAL);
-        cards.add(new QuestionPanel(this, "Question", () -> new Question[0]), QUESTION);
-        cards.add(new ScreenPanel(this, "resources/images/HowToPlayScreen.png"), HOW_TO_PLAY);
+        // One question window for the whole game; startTopic() refills it for each topic.
+        questionPanel = new QuestionPanel(this, "Question", () -> new Question[0]);
+        cards.add(questionPanel, QUESTION);
+        cards.add(new ScreenPanel(this, "resources/images/screens/HowToPlayScreen.png"), HOW_TO_PLAY);
 
-        ScreenPanel developers = new ScreenPanel(this, "resources/images/CreditsDevelopers.png");
+        ScreenPanel developers = new ScreenPanel(this, "resources/images/screens/CreditsDevelopers.png");
         developers.addHotspot(1726, 662, 151, 151, "Next", () -> showScreen(CREDITS_INSPIRATION));
-        ScreenPanel inspiration = new ScreenPanel(this, "resources/images/CreditsInspiration.png");
+        ScreenPanel inspiration = new ScreenPanel(this, "resources/images/screens/CreditsInspiration.png");
         inspiration.addHotspot(123, 662, 151, 151, "Previous", () -> showScreen(CREDITS));
         cards.add(developers, CREDITS);
         cards.add(inspiration, CREDITS_INSPIRATION);
@@ -84,24 +88,69 @@ public class MainFrame extends JFrame {
         SoundManager.playOpening();
     }
 
+    /**
+     * Decodes and crops all artwork in parallel before the screens are built. The button pictures sit on
+     * very large transparent canvases, so doing this one after another made start-up slow.
+     */
+    private static void preloadArt() {
+        java.util.List<String> art = new java.util.ArrayList<>(java.util.List.of(
+                "resources/images/screens/background.png", "resources/images/screens/MainScreen.png",
+                "resources/images/screens/PlayScreen.png", "resources/images/screens/HowToPlayScreen.png",
+                "resources/images/screens/CreditsDevelopers.png", "resources/images/screens/CreditsInspiration.png",
+                "resources/images/heart.png", "resources/images/correct.png", "resources/images/wrong.png",
+                "resources/images/cursor.png"));
+        String[] buttons = {"start", "howToPlay", "credits", "exit", "theoretical", "practical",
+                "a_letter", "b_letter", "c_letter", "d_letter", "peek_button", "copy_button", "save_button"};
+        for (String name : buttons) {
+            art.add("resources/images/buttons/" + name + ".png");
+        }
+        for (int i = 1; i <= 8; i++) {
+            art.add("resources/images/buttons/theoreticalButtons/module" + i + ".png");
+            if (i > 1) {
+                art.add("resources/images/buttons/theoreticalButtons/module" + i + "-locked.png");
+            }
+        }
+        for (String name : new String[]{"C", "java", "pyton", "haskell"}) {
+            art.add("resources/images/buttons/practicalButtons/" + name + ".png");
+        }
+        art.parallelStream().forEach(path -> {
+            BufferedImage image = ImageLibrary.load(path);
+            if (path.contains("/buttons/")) {
+                ImageButton.prepare(image);
+            }
+        });
+    }
+
     public boolean isTheoreticalUnlocked(int index) {
         return index >= 0 && index < theoreticalUnlocked.length && theoreticalUnlocked[index];
     }
 
-    /** Starts one lesson/language stage. Each round asks up to 10 randomly selected questions. */
+    /**
+     * Starts one stage: up to 10 questions from the topic, ordered easy -> medium -> hard, random inside
+     * each difficulty, with the four choices shuffled. Reuses the single question window.
+     */
     public void startTopic(String branch, String topic) {
+        boolean theoretical = branch.equalsIgnoreCase("Theoretical");
         int topicIndex = questionBank.topics(branch).indexOf(topic);
-        questionPanel = new QuestionPanel(this, branch + " - " + topic,
-                () -> questionBank.drawTopic(branch, topic, QUESTIONS_PER_STAGE),
-                won -> {
-                    if (won && branch.equalsIgnoreCase("Theoretical") && topicIndex >= 0
-                            && topicIndex + 1 < theoreticalUnlocked.length) {
-                        theoreticalUnlocked[topicIndex + 1] = true;
-                    }
-                    theoreticalPanel.refreshLocks();
-                });
-        cards.add(questionPanel, QUESTION);
+        String title = theoretical && topicIndex >= 0
+                ? "Module " + (topicIndex + 1) + " - " + topic
+                : branch + " - " + topic;
+        Supplier<String> onWin = theoretical ? () -> unlockAfter(topicIndex) : null;
+        questionPanel.startTopic(title,
+                () -> questionBank.drawStage(branch, topic, QUESTIONS_PER_STAGE),
+                theoretical ? THEORETICAL : PRACTICAL, onWin);
         showScreen(QUESTION);
+    }
+
+    /** Clearing module i opens module i + 1. Returns a line for the Victory text, or null. */
+    private String unlockAfter(int topicIndex) {
+        int next = topicIndex + 1;
+        if (topicIndex >= 0 && next < theoreticalUnlocked.length && !theoreticalUnlocked[next]) {
+            theoreticalUnlocked[next] = true;
+            theoreticalPanel.refreshLocks();
+            return "Module " + (next + 1) + " unlocked!";
+        }
+        return null;
     }
 
     public void showScreen(String name) {

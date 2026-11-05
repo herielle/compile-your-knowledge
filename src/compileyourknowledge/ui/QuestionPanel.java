@@ -1,6 +1,7 @@
 package compileyourknowledge.ui;
 
 import compileyourknowledge.model.Question;
+import compileyourknowledge.util.Backdrop;
 import compileyourknowledge.util.ImageLibrary;
 
 import javax.swing.JButton;
@@ -21,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
-import java.util.function.Consumer;
 
 public class QuestionPanel extends JPanel {
 
@@ -57,14 +57,16 @@ public class QuestionPanel extends JPanel {
     private static final int NEXT_QUESTION_DELAY_MS = 900;
 
     private final MainFrame frame;
-    private final String windowTitle;
+    private String windowTitle;
     /** Called at the start of every round, so each round can come back freshly shuffled. */
-    private final Supplier<Question[]> questionSource;
-    private final Consumer<Boolean> roundFinished;
+    private Supplier<Question[]> questionSource;
+    /** Screen to return to when the window is closed (the topic grid the player came from). */
+    private String backScreen = MainFrame.START;
+    /** Called when a round is won; may unlock the next module and return a line to show, or null. */
+    private Supplier<String> onWin;
     private Question[] questions = new Question[0];
-    private final int[] choiceOrder = {0, 1, 2, 3};
 
-    private final BufferedImage background = ImageLibrary.load("resources/images/background.png");
+    private final BufferedImage background = ImageLibrary.load("resources/images/screens/background.png");
     private final BufferedImage heartImage = cropToAlpha(ImageLibrary.load("resources/images/heart.png"));
     private final BufferedImage correctImage = cropToAlpha(ImageLibrary.load("resources/images/correct.png"));
     private final BufferedImage wrongImage = cropToAlpha(ImageLibrary.load("resources/images/wrong.png"));
@@ -102,14 +104,9 @@ public class QuestionPanel extends JPanel {
 
     /** A panel that asks the supplier for a new set of questions at the start of every round. */
     public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource) {
-        this(frame, windowTitle, questionSource, won -> {});
-    }
-
-    public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource, Consumer<Boolean> roundFinished) {
         this.frame = frame;
         this.windowTitle = windowTitle;
         this.questionSource = questionSource;
-        this.roundFinished = roundFinished == null ? won -> {} : roundFinished;
         setLayout(null); // positioned by doLayout()
 
         // Scrollable text inside the grey question panel.
@@ -177,10 +174,25 @@ public class QuestionPanel extends JPanel {
         startRound();
     }
 
+    /**
+     * Starts a fresh round for one topic. The one shared window is reused for every topic, so no new
+     * panel (and no new copy of the artwork) is created per round.
+     */
+    public void startTopic(String windowTitle, Supplier<Question[]> questionSource,
+                           String backScreen, Supplier<String> onWin) {
+        this.windowTitle = windowTitle;
+        this.questionSource = questionSource;
+        this.backScreen = backScreen;
+        this.onWin = onWin;
+        startRound();
+    }
+
     private void leave() {
-        startRound(); // reset so the next visit starts fresh
+        if (nextTimer != null) {
+            nextTimer.stop(); // never let a pending "next question" fire after the window is closed
+        }
         if (frame != null) {
-            frame.showScreen(MainFrame.START);
+            frame.showScreen(backScreen);
         }
     }
 
@@ -263,10 +275,7 @@ public class QuestionPanel extends JPanel {
         int w = getWidth();
         int h = getHeight();
         if (background != null) {
-            double s = Math.max((double) w / background.getWidth(), (double) h / background.getHeight());
-            int dw = (int) Math.round(background.getWidth() * s);
-            int dh = (int) Math.round(background.getHeight() * s);
-            g2.drawImage(background, (w - dw) / 2, (h - dh) / 2, dw, dh, null);
+            Backdrop.paint(g2, background, w, h);
         } else {
             Theme.paintSky(g2, w, h);
         }
@@ -439,9 +448,6 @@ public class QuestionPanel extends JPanel {
 
     private void showQuestion() {
         java.util.Arrays.fill(removed, false);
-        List<Integer> order = new ArrayList<>(List.of(0, 1, 2, 3));
-        Collections.shuffle(order);
-        for (int i = 0; i < 4; i++) choiceOrder[i] = order.get(i);
         locked = false;
         note = "";
         refreshText();
@@ -456,9 +462,8 @@ public class QuestionPanel extends JPanel {
         Question q = questions[current];
         StringBuilder sb = new StringBuilder(q.getPrompt()).append("\n\n");
         for (int i = 0; i < 4; i++) {
-            int original = choiceOrder[i];
             sb.append((char) ('A' + i)).append(". ")
-                    .append(q.getChoice(original).replace("\n", "\n   ")).append("\n");
+                    .append(q.getChoice(i).replace("\n", "\n   ")).append("\n");
         }
         if (!note.isEmpty()) {
             sb.append("\n").append(note);
@@ -473,7 +478,7 @@ public class QuestionPanel extends JPanel {
             return;
         }
         Question q = questions[current];
-        if (choiceOrder[choice] == q.getCorrectIndex()) {
+        if (choice == q.getCorrectIndex()) {
             score += POINTS_PER_LEVEL * q.getDifficulty();
             locked = true;
             marks[choice].setImage(correctImage);
@@ -507,7 +512,9 @@ public class QuestionPanel extends JPanel {
         locked = true;
         String result;
         if (won) {
-            result = "VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score;
+            String unlocked = onWin == null ? null : onWin.get();
+            result = "VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score
+                    + (unlocked == null ? "" : "\n\n" + unlocked);
         } else {
             result = "GAME OVER\n\nYou ran out of hearts.\n\nScore: " + score
                     + (savedScore >= 0 ? "\nSaved checkpoint: " + savedScore : "")
@@ -517,7 +524,6 @@ public class QuestionPanel extends JPanel {
         textArea.setCaretPosition(0);
         againButton.setVisible(true);
         refreshControls();
-        roundFinished.accept(won);
     }
 
     // ------------------------------------------------------------------ lifelines
