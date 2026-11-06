@@ -85,6 +85,7 @@ public class MainFrame extends JFrame {
 
         showScreen(SPLASH);
         setFullScreen(true);
+        SoundManager.installClickSound();
         SoundManager.playOpening();
     }
 

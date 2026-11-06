@@ -3,6 +3,7 @@ package compileyourknowledge.ui;
 import compileyourknowledge.model.Question;
 import compileyourknowledge.util.Backdrop;
 import compileyourknowledge.util.ImageLibrary;
+import compileyourknowledge.util.SoundManager;
 
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -513,6 +514,7 @@ public class QuestionPanel extends JPanel {
         }
         Question q = questions[current];
         if (choice == q.getCorrectIndex()) {
+            SoundManager.playCorrect();
             score += POINTS_PER_LEVEL * q.getDifficulty();
             locked = true;
             marks[choice].setImage(correctImage);
@@ -521,6 +523,7 @@ public class QuestionPanel extends JPanel {
             nextTimer.setRepeats(false);
             nextTimer.start();
         } else {
+            SoundManager.playIncorrect();
             removed[choice] = true;
             lives--;
             marks[choice].setImage(wrongImage);
@@ -778,6 +781,7 @@ public class QuestionPanel extends JPanel {
                 public void mousePressed(MouseEvent e) {
                     int h = hit(e.getX(), e.getY());
                     if (h >= 0 && SwingUtilities.isLeftMouseButton(e)) {
+                        SoundManager.playClick(); // the dialog buttons are painted by hand, not real buttons
                         actions[h].run();
                     }
                 }
