@@ -1,7 +1,15 @@
 package compileyourknowledge.util;
 
+import javazoom.jl.decoder.Bitstream;
+import javazoom.jl.decoder.Decoder;
+import javazoom.jl.decoder.Header;
+import javazoom.jl.decoder.SampleBuffer;
 import javazoom.jl.player.Player;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.DataLine;
 import javax.swing.AbstractButton;
 import javax.swing.SwingUtilities;
 import java.awt.AWTEvent;
@@ -25,7 +33,12 @@ public final class SoundManager {
     private static final String CORRECT_SOUND = "resources/sounds/Correct.mp3";
     private static final String INCORRECT_SOUND = "resources/sounds/Incorrect.mp3";
 
+    /** Raw mp3 bytes of the short effects (only used as a fallback while the fast version is loading). */
     private static final java.util.Map<String, byte[]> EFFECT_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Effects that are fully decoded and ready to play with no start-up cost. */
+    private static final java.util.Map<String, Effect> EFFECTS = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Quiet samples at the very start of a decoded effect are cut off (16-bit sample value). */
+    private static final int SILENCE_THRESHOLD = 400;
     private static boolean clickListenerInstalled = false;
 
     private static Track opening;
@@ -66,11 +79,18 @@ public final class SoundManager {
         playEffect(INCORRECT_SOUND);
     }
 
-    /** Reads the short effect files into memory on a background thread so the first press is not slow. */
+    /**
+     * Decodes the short effects once, on a background thread, and opens their audio lines ahead of
+     * time. Playing them later only has to press "start" on a line that is already open, which is
+     * what removes the delay after a click.
+     */
     private static void preloadEffects() {
         Thread t = new Thread(() -> {
             for (String path : new String[]{CLICK_SOUND, CORRECT_SOUND, INCORRECT_SOUND}) {
-                effectBytes(path);
+                Effect effect = loadEffect(path);
+                if (effect != null) {
+                    EFFECTS.put(path, effect);
+                }
             }
         }, "sound-preload");
         t.setDaemon(true);
@@ -98,8 +118,18 @@ public final class SoundManager {
         }
     }
 
-    /** Fire-and-forget: each effect gets its own thread, so effects overlap and never block the UI. */
+    /** Plays a short effect. Uses the ready-made line when there is one, so it starts at once. */
     private static void playEffect(String path) {
+        Effect effect = EFFECTS.get(path);
+        if (effect != null) {
+            effect.play();
+            return;
+        }
+        playEffectStreaming(path); // the preload has not finished yet: slower, but still works
+    }
+
+    /** Fallback: decodes and plays on its own thread, so it never blocks the UI (but it starts late). */
+    private static void playEffectStreaming(String path) {
         Thread t = new Thread(() -> {
             byte[] data = effectBytes(path);
             if (data == null) {
@@ -113,6 +143,114 @@ public final class SoundManager {
         }, "effect-" + path);
         t.setDaemon(true);
         t.start();
+    }
+
+    /** Decodes the mp3 to raw sound and opens a few lines for it, so overlapping plays are possible. */
+    private static Effect loadEffect(String path) {
+        byte[] mp3 = effectBytes(path);
+        if (mp3 == null) {
+            return null;
+        }
+        try {
+            Pcm pcm = decode(mp3);
+            AudioFormat format = new AudioFormat(pcm.sampleRate, 16, pcm.channels, true, false);
+            DataLine.Info info = new DataLine.Info(Clip.class, format);
+            Clip[] clips = new Clip[Effect.VOICES];
+            for (int i = 0; i < clips.length; i++) {
+                clips[i] = (Clip) AudioSystem.getLine(info);
+                clips[i].open(format, pcm.data, 0, pcm.data.length);
+            }
+            return new Effect(clips);
+        } catch (Throwable e) {
+            System.err.println("Could not prepare effect '" + path + "': " + e);
+            return null;
+        }
+    }
+
+    private static Pcm decode(byte[] mp3) throws Exception {
+        Bitstream bitstream = new Bitstream(new ByteArrayInputStream(mp3));
+        Decoder decoder = new Decoder();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int rate = 44100;
+        int channels = 2;
+        try {
+            Header header;
+            while ((header = bitstream.readFrame()) != null) {
+                SampleBuffer samples = (SampleBuffer) decoder.decodeFrame(header, bitstream);
+                rate = samples.getSampleFrequency();
+                channels = samples.getChannelCount();
+                short[] buf = samples.getBuffer();
+                int len = samples.getBufferLength();
+                for (int i = 0; i < len; i++) {
+                    out.write(buf[i] & 0xFF);          // little endian, signed 16-bit
+                    out.write((buf[i] >> 8) & 0xFF);
+                }
+                bitstream.closeFrame();
+            }
+        } finally {
+            bitstream.close();
+        }
+        return new Pcm(trimLeadingSilence(out.toByteArray(), channels), rate, channels);
+    }
+
+    /** mp3 files start with a short stretch of silence; cutting it makes the click feel instant. */
+    private static byte[] trimLeadingSilence(byte[] data, int channels) {
+        int frameBytes = 2 * channels;
+        int start = 0;
+        while (start + 1 < data.length) {
+            int sample = (short) ((data[start] & 0xFF) | (data[start + 1] << 8));
+            if (Math.abs(sample) > SILENCE_THRESHOLD) {
+                break;
+            }
+            start += 2;
+        }
+        start -= start % frameBytes;
+        if (start >= data.length) {
+            start = 0; // all quiet: keep it as it is
+        }
+        int length = data.length - start;
+        length -= length % frameBytes;
+        return java.util.Arrays.copyOfRange(data, start, start + length);
+    }
+
+    private static final class Pcm {
+        final byte[] data;
+        final int sampleRate;
+        final int channels;
+
+        Pcm(byte[] data, int sampleRate, int channels) {
+            this.data = data;
+            this.sampleRate = sampleRate;
+            this.channels = channels;
+        }
+    }
+
+    /** A short sound held in a few already-open lines, so it can play again before it has finished. */
+    private static final class Effect {
+        static final int VOICES = 3;
+        private final Clip[] clips;
+        private int next = 0;
+
+        Effect(Clip[] clips) {
+            this.clips = clips;
+        }
+
+        synchronized void play() {
+            for (Clip c : clips) {
+                if (!c.isRunning()) {
+                    restart(c);
+                    return;
+                }
+            }
+            restart(clips[next]); // every line is busy: cut the oldest one off
+            next = (next + 1) % clips.length;
+        }
+
+        private void restart(Clip c) {
+            c.stop();
+            c.setFramePosition(0);
+            c.start();
+        }
     }
 
     /** Plays the opening sound once. Restarts it if it is already playing. */
