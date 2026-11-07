@@ -48,7 +48,9 @@ final class RetroPainter {
 
     // the minimize, maximize and close boxes in the title bar
     private static void paintControls(Graphics2D g2, ArtSpace art) {
+        
         double[] boxX = {1907, 2000, 2095};
+        
         for (double x : boxX) {
             fillArt(g2, art, x, 205, 62, 62, GREY);
         }

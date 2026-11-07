@@ -67,6 +67,7 @@ public class PlayPanel extends JPanel {
         ImageButton[] buttons = {theoreticalButton, practicalButton};
         for (int i = 0; i < buttons.length; i++) {
             ImageButton button = buttons[i];
+            
             int bw = (int) Math.round(BUTTON_WIDTH * scale);
             int bh = (int) Math.round(bw * button.aspectRatio());
             int padX = (int) Math.round(bw * PADDING);

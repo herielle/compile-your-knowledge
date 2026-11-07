@@ -6,6 +6,7 @@ import java.awt.Graphics2D;
 import java.awt.LinearGradientPaint;
 
     /** shared colors and fonts, plus the sky and hills gradient used when a background picture is missing. */
+    
 public final class Theme {
 
     public static final Color TITLE_BAR = new Color(0, 0, 128);

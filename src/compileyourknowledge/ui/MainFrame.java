@@ -255,7 +255,9 @@ public class MainFrame extends JFrame {
     // opens this topic and loads its saved game straight away, without asking again.
     // the modules up to this one are unlocked again, because the save was made while they were open
     void continueSaved(String branch, String topic) {
+       
         int index = questionBank.topics(branch).indexOf(topic);
+        
         if (branch.equalsIgnoreCase("Theoretical") && index >= 0) {
             for (int i = 0; i <= index && i < theoreticalUnlocked.length; i++) {
                 theoreticalUnlocked[i] = true;
