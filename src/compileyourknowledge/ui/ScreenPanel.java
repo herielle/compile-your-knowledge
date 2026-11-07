@@ -52,12 +52,14 @@ public class ScreenPanel extends JPanel {
     // adds an invisible button over a spot in the artwork (2000 x 1414 units)
     public final void addHotspot(double x, double y, double w, double h, String tooltip, Runnable action) {
         JButton button = new JButton();
+        
         button.setOpaque(false);
         button.setContentAreaFilled(false);
         button.setBorderPainted(false);
         button.setFocusPainted(false);
         button.setToolTipText(tooltip);
         button.addActionListener(e -> action.run());
+        
         hotspots.add(new Hotspot(button, x, y, w, h));
         add(button);
     }
@@ -68,6 +70,7 @@ public class ScreenPanel extends JPanel {
         double scale = Math.max(getWidth() / ART_W, getHeight() / ART_H);
         double offsetX = (getWidth() - ART_W * scale) / 2.0;
         double offsetY = (getHeight() - ART_H * scale) / 2.0;
+        
         for (Hotspot h : hotspots) {
             h.button.setBounds(
                     (int) Math.round(offsetX + h.x * scale),

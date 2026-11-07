@@ -53,12 +53,15 @@ final class SaveStore {
         for (int i = 0; i < game.questions.length; i++) {
             Question q = game.questions[i];
             String k = "q" + i + ".";
+            
             props.setProperty(key(topic, k + "topic"), q.getTopic() == null ? "" : q.getTopic());
             props.setProperty(key(topic, k + "difficulty"), String.valueOf(q.getDifficulty()));
             props.setProperty(key(topic, k + "prompt"), q.getPrompt());
+            
             for (int c = 0; c < 4; c++) {
                 props.setProperty(key(topic, k + "choice" + c), q.getChoice(c));
             }
+
             props.setProperty(key(topic, k + "correct"), String.valueOf(q.getCorrectIndex()));
             props.setProperty(key(topic, k + "hint"), q.getHint() == null ? "" : q.getHint());
         }
@@ -73,24 +76,30 @@ final class SaveStore {
         }
         try {
             SavedGame saved = new SavedGame();
+            
             saved.score = Integer.parseInt(props.getProperty(key(topic, "score")));
             saved.current = Integer.parseInt(props.getProperty(key(topic, "current")));
             saved.lives = Integer.parseInt(props.getProperty(key(topic, "lives")));
             saved.peek = Boolean.parseBoolean(props.getProperty(key(topic, "peek")));
             saved.copy = Boolean.parseBoolean(props.getProperty(key(topic, "copy")));
             saved.hintShown = Boolean.parseBoolean(props.getProperty(key(topic, "hintShown")));
+            
             String removed = props.getProperty(key(topic, "removed"), "0000");   // older saves don't have this
+            
             for (int i = 0; i < 4 && i < removed.length(); i++) {
                 saved.removed[i] = removed.charAt(i) == '1';
             }
             int count = Integer.parseInt(props.getProperty(key(topic, "count")));
             saved.questions = new Question[count];
+            
             for (int i = 0; i < count; i++) {
                 String k = "q" + i + ".";
                 String[] choices = new String[4];
+                
                 for (int c = 0; c < 4; c++) {
                     choices[c] = props.getProperty(key(topic, k + "choice" + c));
                 }
+
                 saved.questions[i] = new Question(
                         props.getProperty(key(topic, k + "topic")),
                         Integer.parseInt(props.getProperty(key(topic, k + "difficulty"))),
@@ -127,6 +136,7 @@ final class SaveStore {
     // deletes the saved game for this topic 
     void clear(String topic) {
         Properties props = load();
+        
         if (props.entrySet().removeIf(e -> String.valueOf(e.getKey()).startsWith(key(topic, "")))) {
             store(props);
         }

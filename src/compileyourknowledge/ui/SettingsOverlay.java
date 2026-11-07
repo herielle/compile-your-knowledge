@@ -229,9 +229,11 @@ final class SettingsOverlay extends JComponent {
             }
         }
         Graphics2D g2 = (Graphics2D) g.create();
+        
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         paintIcon(g2);
+        
         if (dialogOpen) {
             paintDialog(g2);
         }
@@ -246,14 +248,18 @@ final class SettingsOverlay extends JComponent {
         int cx = r.x + r.width / 2;
         int cy = r.y + r.height / 2;
         int s = r.width;
+        
         g2.setColor(Color.BLACK);
         g2.fillRect(cx - s * 28 / 100, cy - s * 10 / 100, s * 12 / 100, s * 20 / 100);
+        
         Polygon cone = new Polygon(
                 new int[]{cx - s * 16 / 100, cx + s * 2 / 100, cx + s * 2 / 100, cx - s * 16 / 100},
                 new int[]{cy - s * 10 / 100, cy - s * 24 / 100, cy + s * 24 / 100, cy + s * 10 / 100}, 4);
         g2.fillPolygon(cone);
         g2.setStroke(new BasicStroke(Math.max(2f, s / 16f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        
         boolean silent = SoundSettings.getMusic() <= 0f && SoundSettings.getEffects() <= 0f;
+       
         if (silent) {
             g2.setColor(new Color(200, 0, 0));
             g2.drawLine(cx + s * 8 / 100, cy - s * 14 / 100, cx + s * 30 / 100, cy + s * 14 / 100);
@@ -268,7 +274,7 @@ final class SettingsOverlay extends JComponent {
 
     // draws the dim background, the dialog box, its title, both sliders and the close button
     private void paintDialog(Graphics2D g2) {
-        g2.setColor(new Color(0, 0, 0, 140));               // dim the game behind
+        g2.setColor(new Color(0, 0, 0, 140)); // dim the game behind
         g2.fillRect(0, 0, getWidth(), getHeight());
 
         Rectangle d = dialogRect();

@@ -147,12 +147,15 @@ public class QuestionPanel extends JPanel {
             letterButtons[i].addActionListener(e -> onAnswer(choice));
             marks[i] = new AnswerMark();
         }
+
         peekButton = new ImageButton(ImageLibrary.load("resources/images/buttons/peek_button.png"), "Peek");
         copyButton = new ImageButton(ImageLibrary.load("resources/images/buttons/copy_button.png"), "Copy");
         saveButton = new ImageButton(ImageLibrary.load("resources/images/buttons/save_button.png"), "Save");
+
         for (ImageButton lifeline : new ImageButton[]{peekButton, copyButton, saveButton}) {
             lifeline.setDimWhenDisabled(true); // a used lifeline looks used
         }
+        
         peekButton.addActionListener(e -> usePeek());
         copyButton.addActionListener(e -> useCopy());
         saveButton.addActionListener(e -> useSave());
@@ -329,6 +332,7 @@ public class QuestionPanel extends JPanel {
         // title text in the title bar
         g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, art.sl(56))));
         g2.setColor(Color.WHITE);
+       
         FontMetrics fm = g2.getFontMetrics();
         String title = finished ? windowTitle + " - " + (lives > 0 ? "You Win!" : "Game Over") : windowTitle;
         int titleY = art.sy(TITLE[1]) + (fm.getAscent() - fm.getDescent()) / 2;
@@ -337,9 +341,11 @@ public class QuestionPanel extends JPanel {
         // small progress and score line along the bottom of the question panel
         g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, art.sl(26))));
         g2.setColor(new Color(40, 40, 40));
+        
         String status = "Question " + Math.min(current + 1, questions.length) + "/" + questions.length
                 + "   Score: " + score;
-        g2.drawString(status, art.sx(TEXT_BOX[0] + 14), art.sy(1108));
+        
+                g2.drawString(status, art.sx(TEXT_BOX[0] + 14), art.sy(1108));
         g2.dispose();
     }
 
@@ -359,11 +365,13 @@ public class QuestionPanel extends JPanel {
         finished = false;
         overlay.close();
         questions = questionSource.get();
+
         if (questions == null || questions.length == 0) {
             finished = true;
             locked = true;
             lives = 0;
             questions = new Question[0];
+            
             textArea.setText("No questions were found.\n\nCheck that resources/questions/questions.csv is in the project.");
             refreshControls();
             return;
@@ -376,6 +384,7 @@ public class QuestionPanel extends JPanel {
         Arrays.fill(removed, false);
         locked = false;
         note = "";
+        
         refreshText();
         refreshControls();
     }
@@ -385,8 +394,10 @@ public class QuestionPanel extends JPanel {
         if (finished) {
             return;
         }
+
         Question q = questions[current];
         StringBuilder sb = new StringBuilder(q.getPrompt()).append("\n\n");
+
         for (int i = 0; i < 4; i++) {
             sb.append((char) ('A' + i)).append(". ")
                     .append(q.getChoice(i).replace("\n", "\n   ")).append("\n");
@@ -394,6 +405,7 @@ public class QuestionPanel extends JPanel {
         if (!note.isEmpty()) {
             sb.append("\n").append(note);
         }
+
         textArea.setText(sb.toString());
         textArea.setCaretPosition(0);
         SwingUtilities.invokeLater(() -> scroll.getVerticalScrollBar().setValue(0));
@@ -407,18 +419,22 @@ public class QuestionPanel extends JPanel {
         Question q = questions[current];
         if (choice == q.getCorrectIndex()) {
             SoundManager.playCorrect();
+
             score += POINTS_PER_LEVEL * q.getDifficulty();
             locked = true;
             marks[choice].setImage(correctImage);
             refreshControls();
+
             nextTimer = new Timer(NEXT_QUESTION_DELAY_MS, e -> advance());
             nextTimer.setRepeats(false);
             nextTimer.start();
         } else {
             SoundManager.playIncorrect();
+
             removed[choice] = true;
             lives--;
             marks[choice].setImage(wrongImage);
+
             if (lives <= 0) {
                 endRound(false);
             } else {
@@ -441,15 +457,20 @@ public class QuestionPanel extends JPanel {
     private void endRound(boolean won) {
         finished = true;
         locked = true;
+
         if (won) {
             saveStore.clear(windowTitle);   // a cleared module has nothing left to resume. a loss keeps the saved checkpoint
         }
+
         refreshControls();
+
         if (won) {
             String unlocked = onWin == null ? null : onWin.get();
+            
             textArea.setText("VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score
                     + (unlocked == null ? "" : "\n\n" + unlocked));
             textArea.setCaretPosition(0);
+            
             if (onNextLevel != null) {
                 final int heartsLeft = lives;   // the next module starts with exactly these hearts
                 final int scoreSoFar = score;   // and keeps adding to this score
@@ -468,6 +489,7 @@ public class QuestionPanel extends JPanel {
             }
             textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nFinal score: " + score);
             textArea.setCaretPosition(0);
+            
             overlay.show(new String[]{"GAME OVER!"}, null, score,
                     new String[]{"Start Again", "Back to Main Menu"},
                     new Runnable[]{this::restartAfterLoss, this::backToMainMenu});
@@ -547,6 +569,7 @@ public class QuestionPanel extends JPanel {
         game.hintShown = !note.isEmpty();
         game.removed = removed.clone();
         game.questions = questions;
+        
         saveStore.write(windowTitle, game);
         overlay.show(new String[]{"Current Score", "Saved!"}, null, -1,
                 new String[]{"Back to Main Menu", "Keep Playing"},
@@ -571,9 +594,11 @@ public class QuestionPanel extends JPanel {
                 marks[i].setImage(null);
             }
         }
+        
         peekButton.setEnabled(lifelineAvailable(peekUsed));
         copyButton.setEnabled(lifelineAvailable(copyUsed));
         saveButton.setEnabled(saveAvailable());
+        
         repaint();
     }
 }
