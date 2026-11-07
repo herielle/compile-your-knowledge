@@ -29,37 +29,36 @@ import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
-    /**
-     * the question window. it keeps track of the round (lives, score, lifelines) and connects the other
-     * pieces together. the drawing helpers are in ArtSpace, RetroPainter, HeartsOverlay, AnswerMark and
-     * DialogOverlay. saved games are handled by SaveStore.
-     */
+/**
+ * the question window. it keeps track of the round (lives, score, lifelines) and connects the other
+ * pieces together. the drawing helpers are in ArtSpace, RetroPainter, HeartsOverlay, AnswerMark and
+ * DialogOverlay. saved games are handled by SaveStore.
+ */
 
 public class QuestionPanel extends JPanel {
 
     // positions in the artwork (2296 x 1624 units)
-    private static final double[] TITLE = {150, 235};               
-    private static final double[] CLOSE = {2095, 205, 62, 62};      
-    private static final double[] TEXT_BOX = {178, 378, 1950, 688}; 
-    private static final double[] HEARTS = {1685, 392, 420, 120};  
+    private static final double[] TITLE = {150, 235};               // left edge and vertical middle
+    private static final double[] CLOSE = {2095, 205, 62, 62};      // the x in the title bar
+    private static final double[] TEXT_BOX = {178, 378, 1950, 688}; // x, y, w, h of the scroll area (the whole grey panel)
+    private static final double[] HEARTS = {1685, 392, 420, 120};   // x, y, w, h (up to 3 hearts, right aligned)
 
     private static final double LETTER_Y = 1162;
     private static final double LETTER_SIZE = 234;
     private static final double[] LETTER_X = {160, 452, 743, 1028};
 
-   
+    // lifeline buttons (peek, copy, save): x, y, w, h
     private static final double[][] LIFELINE = {
             {1313, 1294, 375, 102},
             {1536, 1168, 377, 102},
             {1756, 1294, 375, 102}};
 
-    private static final double PADDING = 0.12;
+    private static final double PADDING = 0.12; // extra room around image buttons so they can grow on hover
 
     // game rules:
     // peek and copy can each be used once per game.
     // save has no limit, as long as the player still has hearts.
-    /** hearts at the start of a new topic. moving to the next module keeps whatever is left. */
-    
+    // hearts at the start of a new topic. moving to the next module keeps whatever is left.
     public static final int MAX_LIVES = 3;
     private static final int POINTS_PER_LEVEL = 100;
     private static final int NEXT_QUESTION_DELAY_MS = 900;
@@ -69,10 +68,10 @@ public class QuestionPanel extends JPanel {
     private final SaveStore saveStore = SaveStore.inUserHome();
 
     private String windowTitle;
-    private Supplier<Question[]> questionSource; // called at the start of every round for a fresh shuffled set
-    private String backScreen = MainFrame.START; // screen to go back to when the window is closed
-    private Supplier<String> onWin; // called on a win. may unlock the next module and return a line to show (or null)
-    private IntConsumer onNextLevel;  // starts the next module with the hearts left. null if there is no next module
+    private Supplier<Question[]> questionSource;   // called at the start of every round for a fresh shuffled set
+    private String backScreen = MainFrame.START;   // screen to go back to when the window is closed
+    private Supplier<String> onWin;                // called on a win. may unlock the next module and return a line to show (or null)
+    private IntConsumer onNextLevel;               // starts the next module with the hearts left. null if there is no next module
     private Question[] questions = new Question[0];
 
     private final BufferedImage background = ImageLibrary.load("resources/images/screens/background.png");
@@ -97,20 +96,20 @@ public class QuestionPanel extends JPanel {
     private int score;
     private boolean peekUsed;
     private boolean copyUsed;
-    private boolean locked;  // true while the correct mark shows, and after the round ends
+    private boolean locked;      // true while the correct mark shows, and after the round ends
     private boolean finished;
-    private String note = ""; // short line under the choices (hint, copy, save)
+    private String note = "";    // short line under the choices (hint, copy, save)
     private final boolean[] removed = new boolean[4];
     private Timer nextTimer;
-    private int textFontSize = -1; // last values given to the text area, so layout only changes them when needed
+    private int textFontSize = -1;     // last values given to the text area, so layout only changes them when needed
     private int textTopMargin = -1;
 
-    // a panel that always plays the same fixed list of questions. 
+    // a panel that always plays the same fixed list of questions.
     public QuestionPanel(MainFrame frame, String windowTitle, Question[] questions) {
         this(frame, windowTitle, () -> questions);
     }
 
-    // a panel that asks the supplier for a new set of questions at the start of every round 
+    // a panel that asks the supplier for a new set of questions at the start of every round.
     public QuestionPanel(MainFrame frame, String windowTitle, Supplier<Question[]> questionSource) {
         this.frame = frame;
         this.windowTitle = windowTitle;
@@ -142,16 +141,13 @@ public class QuestionPanel extends JPanel {
             letterButtons[i] = new ImageButton(
                     ImageLibrary.load("resources/images/buttons/" + letters[i] + "_letter.png"),
                     String.valueOf((char) ('A' + i)));
-
             letterButtons[i].setDimWhenDisabled(true);
             letterButtons[i].addActionListener(e -> onAnswer(choice));
             marks[i] = new AnswerMark();
         }
-
         peekButton = new ImageButton(ImageLibrary.load("resources/images/buttons/peek_button.png"), "Peek");
         copyButton = new ImageButton(ImageLibrary.load("resources/images/buttons/copy_button.png"), "Copy");
         saveButton = new ImageButton(ImageLibrary.load("resources/images/buttons/save_button.png"), "Save");
-
         for (ImageButton lifeline : new ImageButton[]{peekButton, copyButton, saveButton}) {
             lifeline.setDimWhenDisabled(true); // a used lifeline looks used
         }
@@ -190,7 +186,6 @@ public class QuestionPanel extends JPanel {
      * starts a fresh round for one topic. the same window is reused for every topic,
      * so no new panel (or new copy of the artwork) is made each round.
      */
-
     public void startTopic(String windowTitle, Supplier<Question[]> questionSource,
                            String backScreen, Supplier<String> onWin,
                            IntConsumer onNextLevel, int startLives) {
@@ -203,7 +198,7 @@ public class QuestionPanel extends JPanel {
         offerResume();
     }
 
-    // if this topic has a saved game, asks if the player wants to continue it. "no" deletes the save
+    // if this topic has a saved game, asks if the player wants to continue it. "no" deletes the save.
     private void offerResume() {
         SavedGame saved = saveStore.read(windowTitle);
         if (saved == null) {
@@ -215,7 +210,7 @@ public class QuestionPanel extends JPanel {
                                () -> { saveStore.clear(windowTitle); overlay.close(); refreshControls(); }});
     }
 
-    // loads a saved game back into the round
+    // loads a saved game back into the round.
     private void applySave(SavedGame saved) {
         stopTimer();
         questions = saved.questions;
@@ -241,7 +236,7 @@ public class QuestionPanel extends JPanel {
         refreshControls();
     }
 
-    // closes the question window and goes back to the topic screen
+    // closes the question window and goes back to the topic screen.
     private void leave() {
         stopTimer(); // so a waiting "next question" can't fire after the window is closed
         overlay.close();
@@ -250,14 +245,14 @@ public class QuestionPanel extends JPanel {
         }
     }
 
-    // stops the timer that moves to the next question
+    // stops the timer that moves to the next question.
     private void stopTimer() {
         if (nextTimer != null) {
             nextTimer.stop();
         }
     }
 
-    // places the text, hearts, close spot and buttons for the current window size
+    // places the text, hearts, close spot and buttons for the current window size.
     @Override
     public void doLayout() {
         double s = art.scale();
@@ -292,6 +287,7 @@ public class QuestionPanel extends JPanel {
         overlay.setBounds(0, 0, getWidth(), getHeight());
     }
 
+    // places a button so its visible picture fills the given artwork rectangle.
     private void placeImageButton(ImageButton button, double ax, double ay, double aw, double ah, boolean square) {
         int bw = art.sl(aw);
         int bh = square ? art.sl(ah) : (int) Math.round(bw * button.aspectRatio());
@@ -303,7 +299,7 @@ public class QuestionPanel extends JPanel {
         button.setBounds(cx - bw / 2 - padX, cy - bh / 2 - padY, bw + 2 * padX, bh + 2 * padY);
     }
 
-    // draws the background, the window, the title and the question/score line
+    // draws the background, the window, the title and the question/score line.
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -337,12 +333,12 @@ public class QuestionPanel extends JPanel {
         g2.dispose();
     }
 
-    // starts a round with full hearts
+    // starts a round with full hearts.
     private void startRound() {
         startRound(MAX_LIVES);
     }
 
-    // starts a round with this many hearts (fewer than the max when carried over from the last module)
+    // starts a round with this many hearts (fewer than the max when carried over from the last module).
     private void startRound(int startLives) {
         stopTimer();
         current = 0;
@@ -365,7 +361,7 @@ public class QuestionPanel extends JPanel {
         showQuestion();
     }
 
-    // shows the current question with a clean slate (nothing crossed out, no note)
+    // shows the current question with a clean slate (nothing crossed out, no note).
     private void showQuestion() {
         Arrays.fill(removed, false);
         locked = false;
@@ -374,7 +370,7 @@ public class QuestionPanel extends JPanel {
         refreshControls();
     }
 
-    // fills the text area: the question, the four choices, then any hint or note
+    // fills the text area: the question, the four choices, then any hint or note.
     private void refreshText() {
         if (finished) {
             return;
@@ -393,7 +389,7 @@ public class QuestionPanel extends JPanel {
         SwingUtilities.invokeLater(() -> scroll.getVerticalScrollBar().setValue(0));
     }
 
-    // runs when a letter is pressed. a right answer gives points and moves on, a wrong one costs a heart
+    // runs when a letter is pressed. a right answer gives points and moves on, a wrong one costs a heart.
     private void onAnswer(int choice) {
         if (locked || finished || removed[choice] || overlay.isVisible()) {
             return;
@@ -421,7 +417,7 @@ public class QuestionPanel extends JPanel {
         }
     }
 
-    // goes to the next question, or ends the round with a win if that was the last one
+    // goes to the next question, or ends the round with a win if that was the last one.
     private void advance() {
         if (current + 1 >= questions.length) {
             endRound(true);
@@ -431,11 +427,11 @@ public class QuestionPanel extends JPanel {
         }
     }
 
-    // ends the round and shows the win or game over dialog
+    // ends the round and shows the win or game over dialog.
     private void endRound(boolean won) {
         finished = true;
         locked = true;
-        saveStore.clear(windowTitle); // a finished round has nothing left to resume
+        saveStore.clear(windowTitle);   // a finished round has nothing left to resume
         refreshControls();
         if (won) {
             String unlocked = onWin == null ? null : onWin.get();
@@ -448,9 +444,10 @@ public class QuestionPanel extends JPanel {
                         new String[]{"Next Level", "Exit"},
                         new Runnable[]{() -> onNextLevel.accept(heartsLeft), () -> System.exit(0)});
             } else {
+                // nothing comes after this topic (the last module), so offer the main menu instead of exit
                 overlay.show(new String[]{"You Win!"}, unlocked, score,
-                        new String[]{"Start Again", "Exit"},
-                        new Runnable[]{this::startRound, () -> System.exit(0)});
+                        new String[]{"Start Again", "Back to Main Menu"},
+                        new Runnable[]{this::startRound, this::backToMainMenu});
             }
         } else {
             textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nFinal score: " + score);
@@ -462,12 +459,12 @@ public class QuestionPanel extends JPanel {
         repaint();
     }
 
-    // peek and copy can be used once each, and only while a question is open 
+    // peek and copy can be used once each, and only while a question is open.
     private boolean lifelineAvailable(boolean thisOneUsed) {
         return !(finished || locked || thisOneUsed || overlay.isVisible());
     }
 
-    // save is never used up. it works any time the round is still going and the player has hearts
+    // save is never used up. it works any time the round is still going and the player has hearts.
     private boolean saveAvailable() {
         return !finished && !locked && lives > 0 && !overlay.isVisible();
     }
@@ -483,7 +480,7 @@ public class QuestionPanel extends JPanel {
         refreshControls();
     }
 
-    // copy: crosses out two wrong choices
+    // copy: crosses out two wrong choices.
     private void useCopy() {
         if (!lifelineAvailable(copyUsed)) {
             return;
@@ -503,7 +500,7 @@ public class QuestionPanel extends JPanel {
         refreshControls();
     }
 
-    // save: asks first. "yes" saves the game, "no" goes back to the question
+    // save: asks first. "yes" saves the game, "no" goes back to the question.
     private void useSave() {
         if (!saveAvailable()) {
             return;
@@ -513,7 +510,7 @@ public class QuestionPanel extends JPanel {
                 new Runnable[]{this::confirmSave, () -> { overlay.close(); refreshControls(); }});
     }
 
-    // writes the game to the save file, then shows the "saved" dialog 
+    // writes the game to the save file, then shows the "saved" dialog.
     private void confirmSave() {
         SavedGame game = new SavedGame();
         game.score = score;
@@ -530,6 +527,7 @@ public class QuestionPanel extends JPanel {
                 new Runnable[]{this::backToMainMenu, () -> System.exit(0)});
     }
 
+    // goes back to the main menu.
     private void backToMainMenu() {
         stopTimer();
         overlay.close();
@@ -538,7 +536,7 @@ public class QuestionPanel extends JPanel {
         }
     }
 
-    // updates the hearts, which buttons are enabled and which marks are showing
+    // updates the hearts, which buttons are enabled and which marks are showing.
     private void refreshControls() {
         heartsOverlay.setLives(lives);
         for (int i = 0; i < 4; i++) {

@@ -19,9 +19,9 @@ import java.awt.event.MouseEvent;
  * lines, an optional score box and two buttons.
  * it covers the whole panel so nothing underneath can be clicked while it is open.
  */
-
 final class DialogOverlay extends JComponent {
 
+    // the dialog box in artwork units: x, y, w, h
     private static final double[] DLG = {588, 470, 1120, 660};
     private static final double DLG_BTN_W = 440;
     private static final double DLG_BTN_H = 96;
@@ -30,10 +30,10 @@ final class DialogOverlay extends JComponent {
     private final ArtSpace art;
     private String[] lines = {};
     private String extra;
-    private int shownScore = -1; // -1 hides the score box
+    private int shownScore = -1;     // -1 hides the score box
     private String[] labels = {};
     private Runnable[] actions = {};
-    private int hover = -1;  // which button the mouse is on (-1 = none)
+    private int hover = -1;          // which button the mouse is on (-1 = none)
 
     DialogOverlay(ArtSpace art) {
         this.art = art;
@@ -84,7 +84,7 @@ final class DialogOverlay extends JComponent {
         }
     }
 
-    // remembers which button is hovered and repaints only when it changes. 
+    // remembers which button is hovered and repaints only when it changes
     private void setHover(int h) {
         if (h != hover) {
             hover = h;
@@ -92,14 +92,14 @@ final class DialogOverlay extends JComponent {
         }
     }
 
-    // where button number i is, in pixels: x, y, width, height. 
-    // buttons are spaced evenly across the dialog 
+    // where button number i is, in pixels: x, y, width, height
+    // buttons are spaced evenly across the dialog
     private int[] buttonRect(int i) {
         double cx = DLG[0] + DLG[2] * (2 * i + 1) / (2.0 * labels.length);
         return new int[]{art.sx(cx - DLG_BTN_W / 2), art.sy(DLG_BTN_Y), art.sl(DLG_BTN_W), art.sl(DLG_BTN_H)};
     }
 
-    // returns which button is at this point, or -1 if none.
+    // returns which button is at this point, or -1 if none
     private int hit(int x, int y) {
         for (int i = 0; i < labels.length; i++) {
             int[] r = buttonRect(i);
@@ -110,6 +110,7 @@ final class DialogOverlay extends JComponent {
         return -1;
     }
 
+    // the dim background and the dialog box, then the message and the buttons
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
@@ -156,8 +157,7 @@ final class DialogOverlay extends JComponent {
         }
     }
 
-    // every button with a border and its label 
-
+    // every button with a border, a hover color and its label in the middle
     private void paintButtons(Graphics2D g2) {
         g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(10, art.sl(40))));
         FontMetrics fm = g2.getFontMetrics();
@@ -176,7 +176,7 @@ final class DialogOverlay extends JComponent {
         }
     }
 
-    //  text centred on an artwork x position
+    // text centred on an artwork x position
     private void drawCentered(Graphics2D g2, String text, double artCx, double artBaseline) {
         FontMetrics fm = g2.getFontMetrics();
         g2.drawString(text, art.sx(artCx) - fm.stringWidth(text) / 2, art.sy(artBaseline));
