@@ -42,7 +42,7 @@ public class PlayPanel extends JPanel {
         practicalButton = new ImageButton(
                 ImageLibrary.load("resources/images/buttons/practical.png"), "Practical");
 
-        theoreticalButton.addActionListener(e -> frame.showScreen(MainFrame.THEORETICAL));
+        theoreticalButton.addActionListener(e -> frame.openTheoretical());
         practicalButton.addActionListener(e -> frame.showScreen(MainFrame.PRACTICAL));
 
         closeButton = new JButton();
