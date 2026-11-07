@@ -1,5 +1,6 @@
 package compileyourknowledge.ui;
 
+import compileyourknowledge.util.Backdrop;
 import compileyourknowledge.util.ImageLibrary;
 
 import javax.swing.JButton;
@@ -80,16 +81,10 @@ public class ScreenPanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
-        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-
         int w = getWidth();
         int h = getHeight();
         if (background != null) {
-            double scale = Math.max((double) w / background.getWidth(), (double) h / background.getHeight());
-            int drawW = (int) Math.round(background.getWidth() * scale);
-            int drawH = (int) Math.round(background.getHeight() * scale);
-            g2.drawImage(background, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH, null);
+            Backdrop.paint(g2, background, w, h); // scaled once per size, not on every repaint
         } else {
             Theme.paintSky(g2, w, h);
         }

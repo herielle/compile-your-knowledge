@@ -24,14 +24,27 @@ final class RetroPainter {
         fillArt(g2, art, x + border, y + border, w - 2 * border, h - 2 * border, fill);
     }
 
-    /** The retro window from the mockup. */
+    /** The full question window: frame, grey question panel and the title-bar buttons. */
     static void paintWindow(Graphics2D g2, ArtSpace art) {
+        paintFrame(g2, art);
+        boxArt(g2, art, 163, 360, 1970, 772, 12, GREY);                         // question panel
+        fillArt(g2, art, 175, 372, 1946, 12, new Color(222, 222, 222));         // top highlight
+        paintControls(g2, art);
+    }
+
+    /** The empty window used by the topic screens: grey frame, navy title bar, white body, title-bar buttons. */
+    static void paintEmptyWindow(Graphics2D g2, ArtSpace art) {
+        paintFrame(g2, art);
+        paintControls(g2, art);
+    }
+
+    private static void paintFrame(Graphics2D g2, ArtSpace art) {
         boxArt(g2, art, 80, 145, 2136, 1325, 6, GREY);                          // outer frame
         fillArt(g2, art, 108, 175, 2080, 122, new Color(18, 0, 120));           // title bar
         boxArt(g2, art, 106, 323, 2084, 1121, 6, Color.WHITE);                  // white inner area
-        boxArt(g2, art, 163, 360, 1970, 772, 12, GREY);                         // question panel
-        fillArt(g2, art, 175, 372, 1946, 12, new Color(222, 222, 222));         // top highlight
+    }
 
+    private static void paintControls(Graphics2D g2, ArtSpace art) {
         // Minimize, maximize, close boxes.
         double[] bx = {1907, 2000, 2095};
         for (double x : bx) {

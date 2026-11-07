@@ -15,8 +15,19 @@ public class Question {
     private final String hint;
 
     public Question(String topic, int difficulty, String prompt, String[] choices, int correctIndex, String hint) {
-        if (choices.length != 4) {
+        if (choices == null || choices.length != 4) {
             throw new IllegalArgumentException("A question needs exactly four choices.");
+        }
+        for (String choice : choices) {
+            if (choice == null) {
+                throw new IllegalArgumentException("A choice must not be missing.");
+            }
+        }
+        if (prompt == null) {
+            throw new IllegalArgumentException("A question needs a prompt.");
+        }
+        if (correctIndex < 0 || correctIndex > 3) {
+            throw new IllegalArgumentException("The correct answer must be 0 to 3.");
         }
         this.topic = topic;
         this.difficulty = difficulty;

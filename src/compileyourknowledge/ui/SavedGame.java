@@ -9,5 +9,7 @@ final class SavedGame {
     int lives;
     boolean peek;
     boolean copy;
+    boolean hintShown;                 // the Peek hint was showing on the current question
+    boolean[] removed = new boolean[4]; // choices already crossed out on the current question
     Question[] questions;
 }
