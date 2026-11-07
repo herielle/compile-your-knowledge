@@ -4,7 +4,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 
-/** One multiple-choice question. Answers are always four choices (A to D). */
+    /** one multiple choice question. it always has four choices (a to d). */
+
 public class Question {
 
     private final String topic;
@@ -37,14 +38,31 @@ public class Question {
         this.hint = hint;
     }
 
-    public String getTopic() { return topic; }
-    public int getDifficulty() { return difficulty; }
-    public String getPrompt() { return prompt; }
-    public String getChoice(int i) { return choices[i]; }
-    public int getCorrectIndex() { return correctIndex; }
-    public String getHint() { return hint; }
+    public String getTopic() {
+        return topic;
+    }
 
-    /** A copy of this question with the four choices in a random order; the correct index follows its answer. */
+    public int getDifficulty() {
+        return difficulty;
+    }
+
+    public String getPrompt() {
+        return prompt;
+    }
+
+    public String getChoice(int i) {
+        return choices[i];
+    }
+
+    public int getCorrectIndex() {
+        return correctIndex;
+    }
+
+    public String getHint() {
+        return hint;
+    }
+
+    // makes a copy with the four choices in a random order. the correct index moves with its answer
     public Question shuffled(Random random) {
         Integer[] order = {0, 1, 2, 3};
         Collections.shuffle(Arrays.asList(order), random);

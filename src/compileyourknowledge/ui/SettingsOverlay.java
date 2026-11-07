@@ -18,13 +18,13 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 /**
- * Used as the window's glass pane, so it floats above every screen. It shows a small speaker button
- * in the lower right corner; pressing it (or the M key) opens a retro dialog with a music slider and a sound
- * effects slider. While the dialog is closed, only the speaker button takes mouse clicks.
+ * used as the window's glass pane, so it floats above every screen. it shows a small speaker button
+ * in the lower right corner. pressing it (or the m key) opens a dialog with a music slider and
+ * a sound effects slider. while the dialog is closed, only the speaker button takes clicks.
  */
+
 final class SettingsOverlay extends JComponent {
 
-    // Everything is laid out in these "design units" and scaled to the window size.
     private static final double BASE_W = 1000;
     private static final double BASE_H = 700;
 
@@ -34,17 +34,17 @@ final class SettingsOverlay extends JComponent {
     private static final double DLG_W = 560;
     private static final double DLG_H = 380;
     private static final double TITLE_H = 70;
-    private static final double TRACK_X = 190;          // slider track start, from the dialog's left edge
+    private static final double TRACK_X = 190;          
     private static final double TRACK_W = 250;
-    private static final double[] ROW_Y = {130, 212};   // slider centre lines, from the dialog's top edge
+    private static final double[] ROW_Y = {130, 212};   
     private static final double BTN_W = 200;
     private static final double BTN_H = 58;
 
     private static final Color GREY = new Color(192, 192, 192);
     private static final Color BLUE = new Color(0, 0, 205);
 
-    private boolean open;
-    private int dragging = -1;     // 0 = music slider, 1 = effects slider
+    private boolean dialogOpen;
+    private int dragging = -1;    
     private boolean closeHover;
 
     SettingsOverlay() {
@@ -55,10 +55,10 @@ final class SettingsOverlay extends JComponent {
                 if (!SwingUtilities.isLeftMouseButton(e)) {
                     return;
                 }
-                if (!open) {
+                if (!dialogOpen) {
                     if (iconRect().contains(e.getPoint())) {
                         SoundManager.playClick();
-                        SettingsOverlay.this.open();
+                        open();
                     }
                     return;
                 }
@@ -88,7 +88,7 @@ final class SettingsOverlay extends JComponent {
                 if (dragging >= 0) {
                     SoundSettings.save();
                     if (dragging == 1) {
-                        SoundManager.playClick(); // lets the player hear the new effects volume
+                        SoundManager.playClick(); // so the player can hear the new effects volume
                     }
                     dragging = -1;
                 }
@@ -96,7 +96,7 @@ final class SettingsOverlay extends JComponent {
 
             @Override
             public void mouseMoved(MouseEvent e) {
-                boolean hover = open && closeRect().contains(e.getPoint());
+                boolean hover = dialogOpen && closeRect().contains(e.getPoint());
                 if (hover != closeHover) {
                     closeHover = hover;
                     repaint();
@@ -107,68 +107,76 @@ final class SettingsOverlay extends JComponent {
         addMouseMotionListener(mouse);
     }
 
+    // true while the sound dialog is showing. 
     boolean isOpen() {
-        return open;
+        return dialogOpen;
     }
 
+    // opens the sound dialog. 
     void open() {
-        open = true;
+        dialogOpen = true;
         repaint();
     }
 
+    // closes the sound dialog and saves the volumes
     void close() {
-        if (open) {
+        if (dialogOpen) {
             SoundSettings.save();
         }
-        open = false;
+        dialogOpen = false;
         dragging = -1;
         closeHover = false;
         repaint();
     }
 
+    // opens the dialog if it's closed, closes it if it's open
     void toggle() {
-        if (open) {
+        if (dialogOpen) {
             close();
         } else {
             open();
         }
     }
 
-    /** Clicks reach this pane only over the speaker button, or anywhere while the dialog is open. */
+    // clicks only reach this pane over the speaker button, or anywhere while the dialog is open
     @Override
     public boolean contains(int x, int y) {
-        return open || iconRect().contains(x, y);
+        return dialogOpen || iconRect().contains(x, y);
     }
 
-    // ------------------------------------------------------------------ geometry
+    // ---- sizes and positions ----
 
+    // how many pixels one design unit is worth right now
     private double unit() {
         return Math.min(getWidth() / BASE_W, getHeight() / BASE_H);
     }
 
+    // design units to pixels
     private int u(double units) {
         return (int) Math.round(units * unit());
     }
 
+    // the speaker button, in the lower right corner
     private Rectangle iconRect() {
         int size = u(ICON_SIZE);
         int margin = u(ICON_MARGIN);
         return new Rectangle(getWidth() - size - margin, getHeight() - size - margin, size, size);
     }
 
+    // the dialog box, centred in the window. 
     private Rectangle dialogRect() {
         int w = u(DLG_W);
         int h = u(DLG_H);
         return new Rectangle((getWidth() - w) / 2, (getHeight() - h) / 2, w, h);
     }
 
+    // the bar of slider number i
     private Rectangle trackRect(int i) {
         Rectangle d = dialogRect();
         int h = u(14);
         return new Rectangle(d.x + u(TRACK_X), d.y + u(ROW_Y[i]) - h / 2, u(TRACK_W), h);
     }
 
-    /** The area that starts a drag: the track plus some slack, so the thumb is easy to hit. */
     private Rectangle grabRect(int i) {
         Rectangle t = trackRect(i);
         int padX = u(14);
@@ -176,6 +184,7 @@ final class SettingsOverlay extends JComponent {
         return new Rectangle(t.x - padX, t.y - padY, t.width + 2 * padX, t.height + 2 * padY);
     }
 
+    // the close button at the bottom of the dialog.
     private Rectangle closeRect() {
         Rectangle d = dialogRect();
         int w = u(BTN_W);
@@ -183,10 +192,14 @@ final class SettingsOverlay extends JComponent {
         return new Rectangle(d.x + (d.width - w) / 2, d.y + d.height - h - u(32), w, h);
     }
 
+    // ---- slider values ----
+
+    // current volume (0 to 1) of slider i
     private float value(int i) {
         return i == 0 ? SoundSettings.getMusic() : SoundSettings.getEffects();
     }
 
+    // sets slider i's volume from the mouse x position
     private void setValueFromX(int i, int x) {
         Rectangle t = trackRect(i);
         if (t.width <= 0) {
@@ -202,13 +215,14 @@ final class SettingsOverlay extends JComponent {
         repaint();
     }
 
-    // ------------------------------------------------------------------ painting
+    // ---- painting ----
 
+    // draws the speaker button, and the dialog too if it's open
     @Override
     protected void paintComponent(Graphics g) {
-        if (!open) {
-            // This pane sits over every screen, so it is asked to repaint constantly; skip the work
-            // unless the repaint actually touches the speaker button.
+        if (!dialogOpen) {
+            // this pane sits over every screen, so it gets repainted a lot.
+            // skip the work unless the repaint touches the speaker button.
             Rectangle clip = g.getClipBounds();
             if (clip != null && !clip.intersects(iconRect())) {
                 return;
@@ -218,17 +232,17 @@ final class SettingsOverlay extends JComponent {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         paintIcon(g2);
-        if (open) {
+        if (dialogOpen) {
             paintDialog(g2);
         }
         g2.dispose();
     }
 
+    // draws the speaker: a body, a cone, and either sound waves or a red x when everything is muted.
     private void paintIcon(Graphics2D g2) {
         Rectangle r = iconRect();
         box(g2, r.x, r.y, r.width, r.height, Math.max(2, u(3)), GREY);
 
-        // A little speaker: body, cone and two sound waves.
         int cx = r.x + r.width / 2;
         int cy = r.y + r.height / 2;
         int s = r.width;
@@ -252,6 +266,7 @@ final class SettingsOverlay extends JComponent {
         }
     }
 
+    // draws the dim background, the dialog box, its title, both sliders and the close button
     private void paintDialog(Graphics2D g2) {
         g2.setColor(new Color(0, 0, 0, 140));               // dim the game behind
         g2.fillRect(0, 0, getWidth(), getHeight());
@@ -271,7 +286,11 @@ final class SettingsOverlay extends JComponent {
         for (int i = 0; i < 2; i++) {
             paintSlider(g2, i, labels[i]);
         }
+        paintCloseButton(g2);
+    }
 
+    // draws the close button 
+    private void paintCloseButton(Graphics2D g2) {
         Rectangle b = closeRect();
         int border = Math.max(2, u(5));
         g2.setColor(Color.BLACK);
@@ -282,11 +301,12 @@ final class SettingsOverlay extends JComponent {
         g2.fillRect(b.x + border, b.y + border, b.width - 2 * border, Math.max(1, border / 2));
         g2.setColor(Color.BLACK);
         g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, u(26))));
-        fm = g2.getFontMetrics();
+        FontMetrics fm = g2.getFontMetrics();
         g2.drawString("Close", b.x + (b.width - fm.stringWidth("Close")) / 2,
                 b.y + (b.height + fm.getAscent() - fm.getDescent()) / 2);
     }
 
+    // draws one slider
     private void paintSlider(Graphics2D g2, int i, String label) {
         Rectangle d = dialogRect();
         Rectangle t = trackRect(i);
@@ -298,17 +318,17 @@ final class SettingsOverlay extends JComponent {
         g2.setColor(Color.BLACK);
         g2.drawString(label, d.x + u(36), centreY + (fm.getAscent() - fm.getDescent()) / 2);
 
-        // Sunken track with the filled part in blue.
+        // the track, with the filled part in blue
         int border = Math.max(2, u(3));
         box(g2, t.x, t.y, t.width, t.height, border, Color.WHITE);
-        int filled = (int) Math.round((t.width - 2 * border) * v);
+        int filled = Math.round((t.width - 2 * border) * v);
         g2.setColor(BLUE);
         g2.fillRect(t.x + border, t.y + border, filled, t.height - 2 * border);
 
-        // Thumb.
+        // the thumb you drag
         int thumbW = u(22);
         int thumbH = u(40);
-        int thumbX = t.x + (int) Math.round(t.width * v) - thumbW / 2;
+        int thumbX = t.x + Math.round(t.width * v) - thumbW / 2;
         box(g2, thumbX, centreY - thumbH / 2, thumbW, thumbH, border, GREY);
 
         String percent = Math.round(v * 100) + "%";
@@ -316,7 +336,7 @@ final class SettingsOverlay extends JComponent {
         g2.drawString(percent, t.x + t.width + u(26), centreY + (fm.getAscent() - fm.getDescent()) / 2);
     }
 
-    /** A black-bordered box: the border first, then the fill inside it. */
+    // draws a box with a black border
     private static void box(Graphics2D g2, int x, int y, int w, int h, int border, Color fill) {
         g2.setColor(Color.BLACK);
         g2.fillRect(x, y, w, h);

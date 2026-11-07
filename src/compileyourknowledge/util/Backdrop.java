@@ -7,17 +7,19 @@ import java.lang.ref.SoftReference;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Draws a picture so it covers a panel, without rescaling it on every repaint.
- *
- * Scaling a 3250x2298 picture with bicubic filtering on every repaint (and a repaint happens on
- * every frame of a button's hover animation) was the main cause of the lag. Here the picture is
- * scaled once per panel size and the result is reused; drawing it is then a plain fast copy.
- */
+    /**
+     * draws a picture so it covers a panel, without resizing it on every repaint.
+     *
+     * resizing a 3250 x 2298 picture on every repaint (and a button's hover animation repaints every
+     * frame) was the main cause of lag. here the picture is resized once per panel size and the result
+     * is reused, so drawing it is just a quick copy.
+     */
+
 public final class Backdrop {
 
     private static final int MAX_ENTRIES = 8;
 
+    // identifies one resized copy: which picture and what size
     private static final class Key {
         final BufferedImage source;
         final int w, h;
@@ -43,9 +45,10 @@ public final class Backdrop {
         }
     }
 
-    // Least recently used first; old sizes (after a resize or full-screen toggle) fall out of the map.
-    // Values are soft references, so the JVM can drop these big pictures instead of running out of
-    // memory; a dropped one is simply rebuilt the next time it is needed.
+    // least recently used first, so old sizes (after a resize or full screen toggle) drop out.
+    // the values are soft references, so the jvm can throw these big pictures away instead of
+    // running out of memory. a dropped one is just rebuilt when it's needed again.
+
     private static final Map<Key, SoftReference<BufferedImage>> CACHE =
             new LinkedHashMap<Key, SoftReference<BufferedImage>>(16, 0.75f, true) {
         @Override
@@ -57,19 +60,23 @@ public final class Backdrop {
     private Backdrop() {
     }
 
-    /** Paints source so it covers the w x h area (cropping the overflow equally), using the cached copy. */
+    // paints the picture so it covers the w x h area (extra edges are cropped equally), using the saved copy. 
+
     public static void paint(Graphics2D g2, BufferedImage source, int w, int h) {
         if (source == null || w <= 0 || h <= 0) {
             return;
         }
-        // On a high-density screen (Retina) one logical pixel is several real pixels: build the
-        // copy at real resolution, otherwise it is stretched and looks soft.
+
+        // on a high density screen (retina) one logical pixel is several real pixels.
+        // the copy is built at real size, otherwise it gets stretched and looks soft
+
         double density = Math.max(1.0, g2.getTransform().getScaleX());
         int pixelsW = (int) Math.round(w * density);
         int pixelsH = (int) Math.round(h * density);
         g2.drawImage(get(source, pixelsW, pixelsH), 0, 0, w, h, null);
     }
 
+    // returns the saved copy for this size, or builds and saves a new one
     private static synchronized BufferedImage get(BufferedImage source, int w, int h) {
         Key key = new Key(source, w, h);
         SoftReference<BufferedImage> ref = CACHE.get(key);
@@ -81,19 +88,20 @@ public final class Backdrop {
         return cached;
     }
 
+    // makes a copy of the picture that covers w x h, centred 
     private static BufferedImage build(BufferedImage src, int w, int h) {
         double scale = Math.max((double) w / src.getWidth(), (double) h / src.getHeight());
         int drawW = Math.max(w, (int) Math.round(src.getWidth() * scale));
         int drawH = Math.max(h, (int) Math.round(src.getHeight() * scale));
 
-        // Halve step by step first: much smoother than one big jump when shrinking a lot.
+        // shrink in half steps first. it looks much smoother than one big jump
         BufferedImage current = src;
         int cw = src.getWidth();
         int ch = src.getHeight();
         while (cw / 2 >= drawW && ch / 2 >= drawH) {
             cw /= 2;
             ch /= 2;
-            current = draw(current, cw, ch, 0, 0, cw, ch);
+            current = halve(current, cw, ch);
         }
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2 = out.createGraphics();
@@ -104,11 +112,12 @@ public final class Backdrop {
         return out;
     }
 
-    private static BufferedImage draw(BufferedImage img, int w, int h, int x, int y, int dw, int dh) {
+    // makes a smaller copy of a picture at the given size
+    private static BufferedImage halve(BufferedImage img, int w, int h) {
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = out.createGraphics();
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g2.drawImage(img, x, y, dw, dh, null);
+        g2.drawImage(img, 0, 0, w, h, null);
         g2.dispose();
         return out;
     }

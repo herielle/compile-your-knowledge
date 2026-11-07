@@ -24,7 +24,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+     /** plays the game's music and sound effects. */
 
 public final class SoundManager {
 
@@ -35,14 +39,15 @@ public final class SoundManager {
     private static final String CORRECT_SOUND = "resources/sounds/Correct.mp3";
     private static final String INCORRECT_SOUND = "resources/sounds/Incorrect.mp3";
 
-    /** Raw mp3 bytes of the short effects (only used as a fallback while the fast version is loading). */
-    private static final java.util.Map<String, byte[]> EFFECT_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
-    /** Effects that are fully decoded and ready to play with no start-up cost. */
-    private static final java.util.Map<String, Effect> EFFECTS = new java.util.concurrent.ConcurrentHashMap<>();
-    /** Quiet samples at the very start of a decoded effect are cut off (16-bit sample value). */
+   
     private static final int SILENCE_THRESHOLD = 400;
-    private static boolean clickListenerInstalled = false;
 
+    // raw mp3 bytes of the short effects (only used as a backup while the fast version is loading)
+    private static final Map<String, byte[]> EFFECT_CACHE = new ConcurrentHashMap<>();
+    // effects that are fully decoded and ready to play with no start-up delay
+    private static final Map<String, Effect> EFFECTS = new ConcurrentHashMap<>();
+
+    private static boolean clickListenerInstalled = false;
     private static Track opening;
     private static Track gameplay;
 
@@ -50,9 +55,10 @@ public final class SoundManager {
     }
 
     /**
-     * Plays the click sound whenever any enabled button (JButton, ImageButton, GlassButton...) is
-     * pressed with the left mouse button. Call once at start-up.
+     * plays the click sound whenever any enabled button is pressed with the left mouse button.
+     * call this once when the game starts.
      */
+
     public static synchronized void installClickSound() {
         if (clickListenerInstalled) {
             return;
@@ -82,10 +88,11 @@ public final class SoundManager {
     }
 
     /**
-     * Decodes the short effects once, on a background thread, and opens their audio lines ahead of
-     * time. Playing them later only has to press "start" on a line that is already open, which is
-     * what removes the delay after a click.
+     * decodes the short effects once, on a background thread, and opens their audio lines early.
+     * playing them later only has to press start on a line that is already open, which removes
+     * the delay after a click.
      */
+
     private static void preloadEffects() {
         Thread t = new Thread(() -> {
             for (String path : new String[]{CLICK_SOUND, CORRECT_SOUND, INCORRECT_SOUND}) {
@@ -99,6 +106,7 @@ public final class SoundManager {
         t.start();
     }
 
+    // reads the raw mp3 file of an effect (and remembers it). returns null if it can't be read 
     private static byte[] effectBytes(String path) {
         byte[] data = EFFECT_CACHE.get(path);
         if (data != null) {
@@ -120,7 +128,7 @@ public final class SoundManager {
         }
     }
 
-    /** Plays a short effect. Uses the ready-made line when there is one, so it starts at once. */
+    // plays a short effect. uses the ready made line if there is one, so it starts right away
     private static void playEffect(String path) {
         if (SoundSettings.getEffects() <= 0f) {
             return; // effects are turned off
@@ -130,10 +138,10 @@ public final class SoundManager {
             effect.play();
             return;
         }
-        playEffectStreaming(path); // the preload has not finished yet: slower, but still works
+        playEffectStreaming(path); // preload isn't done yet: slower, but it still works
     }
 
-    /** Fallback: decodes and plays on its own thread, so it never blocks the UI (but it starts late). */
+    // backup way to play: decodes and plays on its own thread so the screen never freezes (but it starts late)
     private static void playEffectStreaming(String path) {
         Thread t = new Thread(() -> {
             byte[] data = effectBytes(path);
@@ -150,7 +158,8 @@ public final class SoundManager {
         t.start();
     }
 
-    /** Decodes the mp3 to raw sound and opens a few lines for it, so overlapping plays are possible. */
+    // turns an mp3 into raw sound and opens a few lines for it, so it can overlap with itself
+
     private static Effect loadEffect(String path) {
         byte[] mp3 = effectBytes(path);
         if (mp3 == null) {
@@ -172,6 +181,7 @@ public final class SoundManager {
         }
     }
 
+    // decodes mp3 bytes into raw 16 bit sound, with the quiet start cut off
     private static Pcm decode(byte[] mp3) throws Exception {
         Bitstream bitstream = new Bitstream(new ByteArrayInputStream(mp3));
         Decoder decoder = new Decoder();
@@ -191,7 +201,7 @@ public final class SoundManager {
                     chunk = new byte[len * 2];
                 }
                 for (int i = 0; i < len; i++) {
-                    chunk[2 * i] = (byte) buf[i];             // little endian, signed 16-bit
+                    chunk[2 * i] = (byte) buf[i];             // little endian, signed 16 bit
                     chunk[2 * i + 1] = (byte) (buf[i] >> 8);
                 }
                 out.write(chunk, 0, len * 2);
@@ -203,7 +213,7 @@ public final class SoundManager {
         return new Pcm(trimLeadingSilence(out.toByteArray(), channels), rate, channels);
     }
 
-    /** mp3 files start with a short stretch of silence; cutting it makes the click feel instant. */
+    // mp3 files start with a short quiet part. cutting it makes the click feel instant
     private static byte[] trimLeadingSilence(byte[] data, int channels) {
         int frameBytes = 2 * channels;
         int start = 0;
@@ -216,13 +226,14 @@ public final class SoundManager {
         }
         start -= start % frameBytes;
         if (start >= data.length) {
-            start = 0; // all quiet: keep it as it is
+            start = 0; // it's all quiet, so keep it as it is
         }
         int length = data.length - start;
         length -= length % frameBytes;
-        return java.util.Arrays.copyOfRange(data, start, start + length);
+        return Arrays.copyOfRange(data, start, start + length);
     }
 
+    // raw decoded sound plus the info needed to play it
     private static final class Pcm {
         final byte[] data;
         final int sampleRate;
@@ -235,7 +246,7 @@ public final class SoundManager {
         }
     }
 
-    /** A short sound held in a few already-open lines, so it can play again before it has finished. */
+    // a short sound held in a few open lines, so it can play again before it has finished
     private static final class Effect {
         static final int VOICES = 3;
         private final Clip[] clips;
@@ -245,6 +256,7 @@ public final class SoundManager {
             this.clips = clips;
         }
 
+        // plays the sound on a free line. if all are busy, the oldest one is cut off
         synchronized void play() {
             for (Clip c : clips) {
                 if (!c.isRunning()) {
@@ -252,10 +264,11 @@ public final class SoundManager {
                     return;
                 }
             }
-            restart(clips[next]); // every line is busy: cut the oldest one off
+            restart(clips[next]);
             next = (next + 1) % clips.length;
         }
 
+        // starts a line from the beginning at the current volume
         private void restart(Clip c) {
             c.stop();
             applyVolume(c);
@@ -263,7 +276,7 @@ public final class SoundManager {
             c.start();
         }
 
-        /** Sets the line's gain from the sound-effects slider just before it plays. */
+        // sets the line's volume from the sound effects slider, just before it plays
         private void applyVolume(Clip c) {
             if (c.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                 FloatControl gain = (FloatControl) c.getControl(FloatControl.Type.MASTER_GAIN);
@@ -274,7 +287,7 @@ public final class SoundManager {
         }
     }
 
-    /** Plays the opening sound once. Restarts it if it is already playing. */
+    // plays the opening sound once. restarts it if it's already playing
     public static synchronized void playOpening() {
         try {
             stopOpening();
@@ -285,7 +298,7 @@ public final class SoundManager {
         }
     }
 
-    /** Stops the opening sound and starts the gameplay music, looping forever. */
+    // stops the opening sound and starts the gameplay music, looping forever
     public static synchronized void playGameplay() {
         try {
             if (gameplay != null && gameplay.isRunning()) {
@@ -299,6 +312,7 @@ public final class SoundManager {
         }
     }
 
+    // stops the opening sound.
     public static synchronized void stopOpening() {
         if (opening != null) {
             opening.stop();
@@ -306,6 +320,7 @@ public final class SoundManager {
         }
     }
 
+    // stops the gameplay music
     public static synchronized void stopGameplay() {
         if (gameplay != null) {
             gameplay.stop();
@@ -313,12 +328,13 @@ public final class SoundManager {
         }
     }
 
+    // stops all the music
     public static synchronized void stopAll() {
         stopOpening();
         stopGameplay();
     }
 
-    /** Opens the file from the classpath first, then from the src/ folder (same idea as ImageLibrary). */
+    // opens a sound file from the classpath first, then from the src/ folder (same idea as ImageLibrary)
     private static InputStream open(String path) throws IOException {
         InputStream in = SoundManager.class.getResourceAsStream("/" + path);
         if (in == null) {
@@ -331,9 +347,10 @@ public final class SoundManager {
     }
 
     /**
-     * One music track on its own thread. It is decoded here instead of by JLayer's Player so the
-     * volume slider can change the loudness while the music is playing.
+     * one music track playing on its own thread. it is decoded here instead of by jlayer's Player
+     * so the volume slider can change the loudness while the music is playing.
      */
+
     private static final class Track implements Runnable {
         private static final double BUFFER_SECONDS = 0.2; // also how quickly a volume change is heard
 
@@ -350,6 +367,7 @@ public final class SoundManager {
             this.thread.setDaemon(true);
         }
 
+        // starts playing on the track's thread
         void start() {
             try {
                 thread.start();
@@ -358,20 +376,22 @@ public final class SoundManager {
             }
         }
 
+        // true while the track is still playing
         boolean isRunning() {
             return thread.isAlive() && !stopped;
         }
 
+        // stops the track
         void stop() {
             stopped = true;
             final SourceDataLine l = line;
             if (l != null) {
-                // closing can wait for audio to drain, so never do it on the UI thread
+                // closing can wait for audio to finish, so never do it on the screen's thread
                 Thread closer = new Thread(() -> {
                     try {
                         l.stop();
                         l.flush();
-                        l.close(); // makes a blocked write() return
+                        l.close(); // makes a stuck write() return
                     } catch (Throwable ignored) {
                         // nothing to do
                     }
@@ -381,6 +401,7 @@ public final class SoundManager {
             }
         }
 
+        // plays the file once, or over and over if it loops, until stopped
         @Override
         public void run() {
             try {
@@ -396,7 +417,7 @@ public final class SoundManager {
                 } while (loop && !stopped);
                 SourceDataLine l = line;
                 if (!stopped && l != null) {
-                    l.drain(); // let the end of a one-off sound finish
+                    l.drain(); // let the end of a one-time sound finish
                 }
             } catch (Throwable e) {
                 if (!stopped) {
@@ -407,7 +428,7 @@ public final class SoundManager {
             }
         }
 
-        /** Decodes frame by frame, scales each one by the current music volume and writes it out. */
+        // decodes frame by frame, scales each one by the music volume and writes it out
         private void playStream(InputStream in) throws Exception {
             Bitstream bitstream = new Bitstream(in);
             Decoder decoder = new Decoder();
@@ -428,7 +449,7 @@ public final class SoundManager {
                     float gain = SoundSettings.gain(SoundSettings.getMusic());
                     for (int i = 0; i < len; i++) {
                         int v = Math.round(buf[i] * gain);
-                        out[2 * i] = (byte) v;            // little endian, signed 16-bit
+                        out[2 * i] = (byte) v;            // little endian, signed 16 bit
                         out[2 * i + 1] = (byte) (v >> 8);
                     }
                     l.write(out, 0, len * 2);
@@ -439,6 +460,7 @@ public final class SoundManager {
             }
         }
 
+        // opens the speaker line for this track
         private SourceDataLine openLine(int rate, int channels) throws Exception {
             AudioFormat format = new AudioFormat(rate, 16, channels, true, false);
             SourceDataLine l = (SourceDataLine) AudioSystem.getLine(new DataLine.Info(SourceDataLine.class, format));
@@ -450,6 +472,7 @@ public final class SoundManager {
             return l;
         }
 
+        // closes the speaker line if it's open
         private void closeLine() {
             SourceDataLine l = line;
             if (l != null) {

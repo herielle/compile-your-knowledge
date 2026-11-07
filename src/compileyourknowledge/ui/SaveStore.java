@@ -11,10 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
-/**
- * Saved checkpoints live in one properties file, one entry set per topic, so they survive closing the
- * game. Each topic's keys start with "&lt;topic title&gt;|".
- */
+    /**
+     * keeps saved games in one properties file so they are still there after closing the game
+     * each topic has its own set of keys that start with "topic title|".
+     */
+
 final class SaveStore {
 
     private static final String PROGRESS_KEY = "progress.unlocked";
@@ -25,12 +26,12 @@ final class SaveStore {
         this.file = file;
     }
 
-    /** The default location: a hidden folder in the user's home directory. */
+    // the normal save location: a hidden folder in the user's home directory. 
     static SaveStore inUserHome() {
         return new SaveStore(new File(System.getProperty("user.home"), ".compileyourknowledge/save.properties"));
     }
 
-    /** Saves the round as it stands at the start of the current question. */
+    // saves the round as it is at the start of the current question
     void write(String topic, SavedGame game) {
         Properties props = load();
         props.entrySet().removeIf(e -> String.valueOf(e.getKey()).startsWith(key(topic, "")));
@@ -40,11 +41,14 @@ final class SaveStore {
         props.setProperty(key(topic, "peek"), String.valueOf(game.peek));
         props.setProperty(key(topic, "copy"), String.valueOf(game.copy));
         props.setProperty(key(topic, "hintShown"), String.valueOf(game.hintShown));
+
+        // crossed out choices are stored as 1s and 0s, like 0110
         StringBuilder removed = new StringBuilder();
         for (boolean r : game.removed) {
             removed.append(r ? '1' : '0');
         }
         props.setProperty(key(topic, "removed"), removed.toString());
+
         props.setProperty(key(topic, "count"), String.valueOf(game.questions.length));
         for (int i = 0; i < game.questions.length; i++) {
             Question q = game.questions[i];
@@ -61,7 +65,7 @@ final class SaveStore {
         store(props);
     }
 
-    /** The saved game for this topic, or null if there is none (or it cannot be read). */
+    // gets the saved game for this topic. returns null if there is none or it can't be read
     SavedGame read(String topic) {
         Properties props = load();
         if (props.getProperty(key(topic, "count")) == null) {
@@ -75,7 +79,7 @@ final class SaveStore {
             saved.peek = Boolean.parseBoolean(props.getProperty(key(topic, "peek")));
             saved.copy = Boolean.parseBoolean(props.getProperty(key(topic, "copy")));
             saved.hintShown = Boolean.parseBoolean(props.getProperty(key(topic, "hintShown")));
-            String removed = props.getProperty(key(topic, "removed"), "0000");   // older saves have none
+            String removed = props.getProperty(key(topic, "removed"), "0000");   // older saves don't have this
             for (int i = 0; i < 4 && i < removed.length(); i++) {
                 saved.removed[i] = removed.charAt(i) == '1';
             }
@@ -99,12 +103,12 @@ final class SaveStore {
                 return null;
             }
             return saved;
-        } catch (RuntimeException e) {   // missing key, bad number, bad question: treat as no save
+        } catch (RuntimeException e) { // missing key or bad number means the save is broken, so treat it as no save
             return null;
         }
     }
 
-    /** How many theoretical modules the player has unlocked so far (at least 1). */
+    // how many theoretical modules are unlocked so far (always at least 1)
     int readUnlockedModules() {
         try {
             return Math.max(1, Integer.parseInt(load().getProperty(PROGRESS_KEY, "1").trim()));
@@ -113,12 +117,14 @@ final class SaveStore {
         }
     }
 
+    // saves how many theoretical modules are unlocked
     void writeUnlockedModules(int count) {
         Properties props = load();
         props.setProperty(PROGRESS_KEY, String.valueOf(Math.max(1, count)));
         store(props);
     }
 
+    // deletes the saved game for this topic 
     void clear(String topic) {
         Properties props = load();
         if (props.entrySet().removeIf(e -> String.valueOf(e.getKey()).startsWith(key(topic, "")))) {
@@ -126,10 +132,12 @@ final class SaveStore {
         }
     }
 
+    // builds the full key for a topic, like "Module 1 - Basics|score". 
     private static String key(String topic, String name) {
         return topic + "|" + name;
     }
 
+    // reads the whole save file. returns an empty set if the file doesn't exist yet
     private Properties load() {
         Properties props = new Properties();
         if (file.exists()) {
@@ -142,13 +150,15 @@ final class SaveStore {
         return props;
     }
 
+    // writes the whole save file. 
     private void store(Properties props) {
         try {
             File dir = file.getParentFile();
             if (dir != null) {
                 dir.mkdirs();
             }
-            // Write to a temporary file first and swap it in, so a crash can never leave a half-written save.
+            
+            // write to a temp file first, then swap it in, so a crash can't leave a half written save
             File temp = new File(file.getPath() + ".tmp");
             try (FileOutputStream out = new FileOutputStream(temp)) {
                 props.store(out, "Compile Your Knowledge - saved games");
