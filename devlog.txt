@@ -3,18 +3,3 @@ HOW TO RUN:
 javac -cp "lib/*" -d bin $(find src -name "*.java")
 java -cp "bin:lib/*:src" compileyourknowledge.Main
 
-10/22/26
-(Herielle)
-    - Added hovering buttons for the Main, trying to work on the Splash Screen
-
-10/22/26
-(Lorenz)
-    - Added Sounds folder and sounds for background music and starting
-
-10/23/26
-(Lorenz)
-    -  Added PlayPanel.Java and playscreen for theoretical and practical 
-
-11/03/26
-Herielle
-    - ADDED CSV SYSTEM
