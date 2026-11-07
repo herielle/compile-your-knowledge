@@ -48,6 +48,7 @@ public class TopicPanel extends JPanel {
     private final List<ImageButton> openButtons = new ArrayList<>();
     private final List<ImageButton> lockedButtons = new ArrayList<>();
     private final JButton closeButton = new JButton();
+    private final DialogOverlay overlay = new DialogOverlay(art);   // the "continue progress" question
 
     public TopicPanel(MainFrame frame, String branch, boolean sequential, QuestionBank bank) {
         this.frame = frame;
@@ -55,6 +56,7 @@ public class TopicPanel extends JPanel {
         this.sequential = sequential;
         this.topics = bank.topics(branch);
         setLayout(null);
+        add(overlay);   // added first so it sits on top of the module buttons
 
         for (int i = 0; i < topics.size(); i++) {
             final int index = i;
@@ -104,6 +106,34 @@ public class TopicPanel extends JPanel {
         repaint();
     }
 
+    // asks if the player wants to continue before picking a module. it asks when there is a saved game
+    // or when more than module 1 is unlocked. "no" throws all of it away and starts again from module 1
+    void offerContinue() {
+        String topic = frame.findSavedTopic(branch);
+        boolean progress = sequential && frame.hasTheoreticalProgress();
+        if (topic == null && !progress) {
+            return;
+        }
+        String extra;
+        int score;
+        if (topic != null) {
+            extra = sequential ? "Module " + (topics.indexOf(topic) + 1) : topic;
+            score = frame.savedScore(branch, topic);
+        } else {
+            extra = "Module " + frame.unlockedCount();   // no saved game, just how far the player got
+            score = -1;                                  // hides the score box
+        }
+        overlay.show(new String[]{"Continue last saved", "progress?"}, extra, score,
+                new String[]{"Yes", "No"},
+                new Runnable[]{() -> {
+                                   overlay.close();
+                                   if (topic != null) {
+                                       frame.continueSaved(branch, topic);
+                                   }
+                               },
+                               () -> { frame.discardProgress(branch); overlay.close(); }});
+    }
+
     // true if the topic at this position can be played. 
     private boolean isUnlocked(int index) {
         return !sequential || frame.isTheoreticalUnlocked(index);
@@ -123,6 +153,7 @@ public class TopicPanel extends JPanel {
     // lines the topic buttons up in a grid inside the white body of the window. 
     @Override
     public void doLayout() {
+        overlay.setBounds(0, 0, getWidth(), getHeight());
         closeButton.setBounds(art.sx(CLOSE[0]), art.sy(CLOSE[1]), art.sl(CLOSE[2]), art.sl(CLOSE[3]));
 
         int n = topics.size();

@@ -21,8 +21,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.function.IntConsumer;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
     /** the main window. 
@@ -182,19 +183,17 @@ public class MainFrame extends JFrame {
      */
 
     public void startTopic(String branch, String topic) {
-        startTopic(branch, topic, QuestionPanel.MAX_LIVES);
+        startTopic(branch, topic, QuestionPanel.MAX_LIVES, 0, false);
     }
 
-    // same as above, but the player starts with this many hearts (carried over from the last module)
-    private void startTopic(String branch, String topic, int startLives) {
+    // same as above, but the player starts with this many hearts and this score (carried over from the last module)
+    private void startTopic(String branch, String topic, int startLives, int startScore, boolean resumeNow) {
         boolean theoretical = branch.equalsIgnoreCase("Theoretical");
         List<String> topics = questionBank.topics(branch);
         
         int topicIndex = topics.indexOf(topic);
        
-        String title = theoretical && topicIndex >= 0
-                ? "Module " + (topicIndex + 1) + " - " + topic
-                : branch + " - " + topic;
+        String title = titleFor(branch, topic);
 
         // winning a theoretical module unlocks the next one
         Supplier<String> onWin = theoretical ? () -> unlockAfter(topicIndex) : null;
@@ -202,15 +201,103 @@ public class MainFrame extends JFrame {
         // "next level" after a win opens the following module (theoretical only)
        
         int next = topicIndex + 1;
-        IntConsumer onNext = theoretical && topicIndex >= 0 && next < topics.size()
+        BiConsumer<Integer, Integer> onNext = theoretical && topicIndex >= 0 && next < topics.size()
                 && next < theoreticalUnlocked.length
-                ? hearts -> startTopic(branch, topics.get(next), hearts)
+                ? (hearts, carriedScore) -> startTopic(branch, topics.get(next), hearts, carriedScore, false)
                 : null;
+
+        // losing sends the player back to module 1 with full hearts (theoretical only)
+        Runnable onRestart = theoretical && topicIndex > 0
+                ? () -> startTopic(branch, topics.get(0), QuestionPanel.MAX_LIVES, 0, false)
+                : null;
+
+        // losing also locks the modules again, so the run starts over from module 1
+        Runnable onLose = theoretical ? this::resetTheoreticalProgress : null;
 
         questionPanel.startTopic(title,
                 () -> questionBank.drawStage(branch, topic, QUESTIONS_PER_STAGE),
-                theoretical ? THEORETICAL : PRACTICAL, onWin, onNext, startLives);
+                theoretical ? THEORETICAL : PRACTICAL, onWin, onNext, onRestart, onLose, startLives, startScore, resumeNow);
         showScreen(QUESTION);
+    }
+
+    // the name a topic is saved under, like "Module 3 - Loops". the save file and the question window both use it
+    private String titleFor(String branch, String topic) {
+        boolean theoretical = branch.equalsIgnoreCase("Theoretical");
+        int topicIndex = questionBank.topics(branch).indexOf(topic);
+        return theoretical && topicIndex >= 0
+                ? "Module " + (topicIndex + 1) + " - " + topic
+                : branch + " - " + topic;
+    }
+
+    // opens the theoretical screen and asks about saved progress before the player picks a module
+    public void openTheoretical() {
+        showScreen(THEORETICAL);
+        theoreticalPanel.offerContinue();
+    }
+
+    // finds the topic in this branch that has a saved game. if there are several, the furthest one. null if none
+    String findSavedTopic(String branch) {
+        List<String> topics = questionBank.topics(branch);
+        for (int i = topics.size() - 1; i >= 0; i--) {
+            if (progressStore.read(titleFor(branch, topics.get(i))) != null) {
+                return topics.get(i);
+            }
+        }
+        return null;
+    }
+
+    // the score that was saved for this topic
+    int savedScore(String branch, String topic) {
+        SavedGame saved = progressStore.read(titleFor(branch, topic));
+        return saved == null ? 0 : saved.score;
+    }
+
+    // opens this topic and loads its saved game straight away, without asking again.
+    // the modules up to this one are unlocked again, because the save was made while they were open
+    void continueSaved(String branch, String topic) {
+        int index = questionBank.topics(branch).indexOf(topic);
+        if (branch.equalsIgnoreCase("Theoretical") && index >= 0) {
+            for (int i = 0; i <= index && i < theoreticalUnlocked.length; i++) {
+                theoreticalUnlocked[i] = true;
+            }
+            progressStore.writeUnlockedModules(unlockedCount());
+            theoreticalPanel.refreshLocks();
+        }
+        startTopic(branch, topic, QuestionPanel.MAX_LIVES, 0, true);   // the saved game brings back its own hearts and score
+    }
+
+    // "no" to continuing: deletes every saved game in this branch and sends the theoretical progress back to module 1
+    void discardProgress(String branch) {
+        for (String topic : questionBank.topics(branch)) {
+            progressStore.clear(titleFor(branch, topic));
+        }
+        if (branch.equalsIgnoreCase("Theoretical")) {
+            resetTheoreticalProgress();
+        }
+    }
+
+    // locks every theoretical module except module 1 and remembers that. runs when the player loses
+    void resetTheoreticalProgress() {
+        Arrays.fill(theoreticalUnlocked, false);
+        theoreticalUnlocked[0] = true;
+        progressStore.writeUnlockedModules(1);
+        theoreticalPanel.refreshLocks();
+    }
+
+    // how many theoretical modules are open right now
+    int unlockedCount() {
+        int count = 0;
+        for (boolean open : theoreticalUnlocked) {
+            if (open) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    // true if the player has opened more than module 1, so there is progress to continue
+    boolean hasTheoreticalProgress() {
+        return unlockedCount() > 1;
     }
 
     // clearing module i unlocks module i + 1. returns a line for the victory text, or null if nothing new unlocked. 

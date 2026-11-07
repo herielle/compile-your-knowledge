@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.IntConsumer;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -71,7 +71,9 @@ public class QuestionPanel extends JPanel {
     private Supplier<Question[]> questionSource;   // called at the start of every round for a fresh shuffled set
     private String backScreen = MainFrame.START;   // screen to go back to when the window is closed
     private Supplier<String> onWin;                // called on a win. may unlock the next module and return a line to show (or null)
-    private IntConsumer onNextLevel;               // starts the next module with the hearts left. null if there is no next module
+    private BiConsumer<Integer, Integer> onNextLevel; // starts the next module with the hearts left and the score so far. null if there is no next module
+    private Runnable onRestart;                    // called on game over + start again. goes back to the first module. null just restarts this topic
+    private Runnable onLose;                       // called the moment the player runs out of hearts. resets the module progress. null if nothing to reset
     private Question[] questions = new Question[0];
 
     private final BufferedImage background = ImageLibrary.load("resources/images/screens/background.png");
@@ -188,14 +190,22 @@ public class QuestionPanel extends JPanel {
      */
     public void startTopic(String windowTitle, Supplier<Question[]> questionSource,
                            String backScreen, Supplier<String> onWin,
-                           IntConsumer onNextLevel, int startLives) {
+                           BiConsumer<Integer, Integer> onNextLevel, Runnable onRestart, Runnable onLose,
+                           int startLives, int startScore, boolean resumeNow) {
         this.windowTitle = windowTitle;
         this.questionSource = questionSource;
         this.backScreen = backScreen;
         this.onWin = onWin;
         this.onNextLevel = onNextLevel;
-        startRound(startLives);
-        offerResume();
+        this.onRestart = onRestart;
+        this.onLose = onLose;
+        startRound(startLives, startScore);
+        SavedGame saved = resumeNow ? saveStore.read(windowTitle) : null;
+        if (saved != null) {
+            applySave(saved);   // the player already said yes on the topic screen, so no second question
+        } else {
+            offerResume();
+        }
     }
 
     // if this topic has a saved game, asks if the player wants to continue it. "no" deletes the save.
@@ -333,17 +343,17 @@ public class QuestionPanel extends JPanel {
         g2.dispose();
     }
 
-    // starts a round with full hearts.
+    // starts a round with full hearts and a score of 0.
     private void startRound() {
-        startRound(MAX_LIVES);
+        startRound(MAX_LIVES, 0);
     }
 
-    // starts a round with this many hearts (fewer than the max when carried over from the last module).
-    private void startRound(int startLives) {
+    // starts a round with this many hearts and this score (both carried over from the last module).
+    private void startRound(int startLives, int startScore) {
         stopTimer();
         current = 0;
         lives = Math.max(1, Math.min(MAX_LIVES, startLives));
-        score = 0;
+        score = startScore;
         peekUsed = false;
         copyUsed = false;
         finished = false;
@@ -431,7 +441,9 @@ public class QuestionPanel extends JPanel {
     private void endRound(boolean won) {
         finished = true;
         locked = true;
-        saveStore.clear(windowTitle);   // a finished round has nothing left to resume
+        if (won) {
+            saveStore.clear(windowTitle);   // a cleared module has nothing left to resume. a loss keeps the saved checkpoint
+        }
         refreshControls();
         if (won) {
             String unlocked = onWin == null ? null : onWin.get();
@@ -440,9 +452,10 @@ public class QuestionPanel extends JPanel {
             textArea.setCaretPosition(0);
             if (onNextLevel != null) {
                 final int heartsLeft = lives;   // the next module starts with exactly these hearts
+                final int scoreSoFar = score;   // and keeps adding to this score
                 overlay.show(new String[]{"You Win!"}, unlocked, score,
-                        new String[]{"Next Level", "Exit"},
-                        new Runnable[]{() -> onNextLevel.accept(heartsLeft), () -> System.exit(0)});
+                        new String[]{"Next Level", "Back to Main Menu"},
+                        new Runnable[]{() -> onNextLevel.accept(heartsLeft, scoreSoFar), this::backToMainMenu});
             } else {
                 // nothing comes after this topic (the last module), so offer the main menu instead of exit
                 overlay.show(new String[]{"You Win!"}, unlocked, score,
@@ -450,13 +463,26 @@ public class QuestionPanel extends JPanel {
                         new Runnable[]{this::startRound, this::backToMainMenu});
             }
         } else {
+            if (onLose != null) {
+                onLose.run();   // losing sends the whole run back to module 1
+            }
             textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nFinal score: " + score);
             textArea.setCaretPosition(0);
             overlay.show(new String[]{"GAME OVER!"}, null, score,
-                    new String[]{"Start Again", "Exit"},
-                    new Runnable[]{this::startRound, () -> System.exit(0)});
+                    new String[]{"Start Again", "Back to Main Menu"},
+                    new Runnable[]{this::restartAfterLoss, this::backToMainMenu});
         }
         repaint();
+    }
+
+    // after a game over: goes back to the first module with full hearts, or just restarts this topic if there is no first module.
+    private void restartAfterLoss() {
+        if (onRestart != null) {
+            onRestart.run();
+        } else {
+            startRound();
+            offerResume();   // the topic may still have a saved game from before the loss
+        }
     }
 
     // peek and copy can be used once each, and only while a question is open.
@@ -523,8 +549,8 @@ public class QuestionPanel extends JPanel {
         game.questions = questions;
         saveStore.write(windowTitle, game);
         overlay.show(new String[]{"Current Score", "Saved!"}, null, -1,
-                new String[]{"Back to Main Menu", "Exit"},
-                new Runnable[]{this::backToMainMenu, () -> System.exit(0)});
+                new String[]{"Back to Main Menu", "Keep Playing"},
+                new Runnable[]{this::backToMainMenu, () -> { overlay.close(); refreshControls(); }});
     }
 
     // goes back to the main menu.
