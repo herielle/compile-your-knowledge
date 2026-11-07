@@ -36,6 +36,19 @@ public final class ImageLibrary {
         return image;
     }
 
+    /**
+     * Swaps a cached picture for a smaller version of itself (for example a button that was cropped
+     * from its huge transparent canvas), so the big original can be garbage collected.
+     */
+    public static void replace(String path, BufferedImage image) {
+        if (image == null) {
+            return;
+        }
+        synchronized (CACHE) {
+            CACHE.put(path, image);
+        }
+    }
+
     private static BufferedImage loadUncached(String path) {
 
         // try the original path first

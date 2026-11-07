@@ -81,6 +81,9 @@ public final class SoundSettings {
     }
 
     private static float clamp(float v) {
+        if (Float.isNaN(v)) {
+            return 1f;
+        }
         return Math.max(0f, Math.min(1f, v));
     }
 }

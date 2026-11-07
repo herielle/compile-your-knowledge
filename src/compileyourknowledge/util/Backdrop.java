@@ -3,6 +3,7 @@ package compileyourknowledge.util;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.lang.ref.SoftReference;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -43,9 +44,12 @@ public final class Backdrop {
     }
 
     // Least recently used first; old sizes (after a resize or full-screen toggle) fall out of the map.
-    private static final Map<Key, BufferedImage> CACHE = new LinkedHashMap<Key, BufferedImage>(16, 0.75f, true) {
+    // Values are soft references, so the JVM can drop these big pictures instead of running out of
+    // memory; a dropped one is simply rebuilt the next time it is needed.
+    private static final Map<Key, SoftReference<BufferedImage>> CACHE =
+            new LinkedHashMap<Key, SoftReference<BufferedImage>>(16, 0.75f, true) {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<Key, BufferedImage> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<Key, SoftReference<BufferedImage>> eldest) {
             return size() > MAX_ENTRIES;
         }
     };
@@ -58,15 +62,21 @@ public final class Backdrop {
         if (source == null || w <= 0 || h <= 0) {
             return;
         }
-        g2.drawImage(get(source, w, h), 0, 0, null);
+        // On a high-density screen (Retina) one logical pixel is several real pixels: build the
+        // copy at real resolution, otherwise it is stretched and looks soft.
+        double density = Math.max(1.0, g2.getTransform().getScaleX());
+        int pixelsW = (int) Math.round(w * density);
+        int pixelsH = (int) Math.round(h * density);
+        g2.drawImage(get(source, pixelsW, pixelsH), 0, 0, w, h, null);
     }
 
     private static synchronized BufferedImage get(BufferedImage source, int w, int h) {
         Key key = new Key(source, w, h);
-        BufferedImage cached = CACHE.get(key);
+        SoftReference<BufferedImage> ref = CACHE.get(key);
+        BufferedImage cached = ref == null ? null : ref.get();
         if (cached == null) {
             cached = build(source, w, h);
-            CACHE.put(key, cached);
+            CACHE.put(key, new SoftReference<>(cached));
         }
         return cached;
     }

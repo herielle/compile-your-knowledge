@@ -176,6 +176,7 @@ public final class SoundManager {
         Bitstream bitstream = new Bitstream(new ByteArrayInputStream(mp3));
         Decoder decoder = new Decoder();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] chunk = new byte[0];
         int rate = 44100;
         int channels = 2;
         try {
@@ -186,10 +187,14 @@ public final class SoundManager {
                 channels = samples.getChannelCount();
                 short[] buf = samples.getBuffer();
                 int len = samples.getBufferLength();
-                for (int i = 0; i < len; i++) {
-                    out.write(buf[i] & 0xFF);          // little endian, signed 16-bit
-                    out.write((buf[i] >> 8) & 0xFF);
+                if (chunk.length < len * 2) {
+                    chunk = new byte[len * 2];
                 }
+                for (int i = 0; i < len; i++) {
+                    chunk[2 * i] = (byte) buf[i];             // little endian, signed 16-bit
+                    chunk[2 * i + 1] = (byte) (buf[i] >> 8);
+                }
+                out.write(chunk, 0, len * 2);
                 bitstream.closeFrame();
             }
         } finally {

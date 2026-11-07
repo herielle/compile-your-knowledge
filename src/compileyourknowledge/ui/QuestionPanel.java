@@ -104,6 +104,8 @@ public class QuestionPanel extends JPanel {
     private String note = "";    // short status line shown under the choices (hint, Copy, Save)
     private final boolean[] removed = new boolean[4];
     private Timer nextTimer;
+    private int textFontSize = -1;     // last values given to the text area, so layout only changes it when needed
+    private int textTopMargin = -1;
 
     /** A panel that always plays the same fixed list of questions. */
     public QuestionPanel(MainFrame frame, String windowTitle, Question[] questions) {
@@ -142,12 +144,16 @@ public class QuestionPanel extends JPanel {
             letterButtons[i] = new ImageButton(
                     ImageLibrary.load("resources/images/buttons/" + letters[i] + "_letter.png"),
                     String.valueOf((char) ('A' + i)));
+            letterButtons[i].setDimWhenDisabled(true);
             letterButtons[i].addActionListener(e -> onAnswer(choice));
             marks[i] = new AnswerMark();
         }
         peekButton = new ImageButton(ImageLibrary.load("resources/images/buttons/peek_button.png"), "Peek");
         copyButton = new ImageButton(ImageLibrary.load("resources/images/buttons/copy_button.png"), "Copy");
         saveButton = new ImageButton(ImageLibrary.load("resources/images/buttons/save_button.png"), "Save");
+        for (ImageButton lifeline : new ImageButton[]{peekButton, copyButton, saveButton}) {
+            lifeline.setDimWhenDisabled(true); // a spent lifeline looks spent
+        }
         peekButton.addActionListener(e -> usePeek());
         copyButton.addActionListener(e -> useCopy());
         saveButton.addActionListener(e -> useSave());
@@ -216,6 +222,18 @@ public class QuestionPanel extends JPanel {
         copyUsed = saved.copy;
         finished = false;
         showQuestion();
+        // Put back what had already happened on this question.
+        System.arraycopy(saved.removed, 0, removed, 0, 4);
+        if (saved.hintShown) {
+            note = "Hint: " + questions[current].getHint();
+        }
+        for (int i = 0; i < 4; i++) {
+            if (removed[i]) {
+                marks[i].setImage(wrongImage);
+            }
+        }
+        refreshText();
+        refreshControls();
     }
 
     private void leave() {
@@ -239,11 +257,19 @@ public class QuestionPanel extends JPanel {
         double s = art.scale();
 
         scroll.setBounds(art.sx(TEXT_BOX[0]), art.sy(TEXT_BOX[1]), art.sl(TEXT_BOX[2]), art.sl(TEXT_BOX[3]));
-        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(11, (int) Math.round(41 * s))));
+        int fontSize = Math.max(11, (int) Math.round(41 * s));
+        if (fontSize != textFontSize) {
+            textFontSize = fontSize;
+            textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, fontSize));
+        }
 
         heartsOverlay.setBounds(art.sx(HEARTS[0]), art.sy(HEARTS[1]), art.sl(HEARTS[2]), art.sl(HEARTS[3]));
         // Leave room at the top of the text for the hearts; the text scrolls up past them.
-        textArea.setMargin(new java.awt.Insets(art.sl(HEARTS[3] + 24), 10, 8, 10));
+        int topMargin = art.sl(HEARTS[3] + 24);
+        if (topMargin != textTopMargin) {
+            textTopMargin = topMargin;
+            textArea.setMargin(new java.awt.Insets(topMargin, 10, 8, 10));
+        }
 
         closeButton.setBounds(art.sx(CLOSE[0]), art.sy(CLOSE[1]), art.sl(CLOSE[2]), art.sl(CLOSE[3]));
 
@@ -425,8 +451,7 @@ public class QuestionPanel extends JPanel {
                         new Runnable[]{this::startRound, () -> System.exit(0)});
             }
         } else {
-            textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nScore: " + score
-                    + "\nFinal score: " + score);
+            textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nFinal score: " + score);
             textArea.setCaretPosition(0);
             overlay.show(new String[]{"GAME OVER!"}, null, score,
                     new String[]{"Start Again", "Exit"},
@@ -493,6 +518,8 @@ public class QuestionPanel extends JPanel {
         game.lives = lives;
         game.peek = peekUsed;
         game.copy = copyUsed;
+        game.hintShown = !note.isEmpty();
+        game.removed = removed.clone();
         game.questions = questions;
         saveStore.write(windowTitle, game);
         overlay.show(new String[]{"Current Score", "Saved!"}, null, -1,

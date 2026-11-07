@@ -6,6 +6,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 
 /**
@@ -13,6 +16,8 @@ import java.util.Properties;
  * game. Each topic's keys start with "&lt;topic title&gt;|".
  */
 final class SaveStore {
+
+    private static final String PROGRESS_KEY = "progress.unlocked";
 
     private final File file;
 
@@ -34,6 +39,12 @@ final class SaveStore {
         props.setProperty(key(topic, "lives"), String.valueOf(game.lives));
         props.setProperty(key(topic, "peek"), String.valueOf(game.peek));
         props.setProperty(key(topic, "copy"), String.valueOf(game.copy));
+        props.setProperty(key(topic, "hintShown"), String.valueOf(game.hintShown));
+        StringBuilder removed = new StringBuilder();
+        for (boolean r : game.removed) {
+            removed.append(r ? '1' : '0');
+        }
+        props.setProperty(key(topic, "removed"), removed.toString());
         props.setProperty(key(topic, "count"), String.valueOf(game.questions.length));
         for (int i = 0; i < game.questions.length; i++) {
             Question q = game.questions[i];
@@ -63,6 +74,11 @@ final class SaveStore {
             saved.lives = Integer.parseInt(props.getProperty(key(topic, "lives")));
             saved.peek = Boolean.parseBoolean(props.getProperty(key(topic, "peek")));
             saved.copy = Boolean.parseBoolean(props.getProperty(key(topic, "copy")));
+            saved.hintShown = Boolean.parseBoolean(props.getProperty(key(topic, "hintShown")));
+            String removed = props.getProperty(key(topic, "removed"), "0000");   // older saves have none
+            for (int i = 0; i < 4 && i < removed.length(); i++) {
+                saved.removed[i] = removed.charAt(i) == '1';
+            }
             int count = Integer.parseInt(props.getProperty(key(topic, "count")));
             saved.questions = new Question[count];
             for (int i = 0; i < count; i++) {
@@ -83,9 +99,24 @@ final class SaveStore {
                 return null;
             }
             return saved;
-        } catch (RuntimeException e) {   // missing key, bad number, null choice: treat as no save
+        } catch (RuntimeException e) {   // missing key, bad number, bad question: treat as no save
             return null;
         }
+    }
+
+    /** How many theoretical modules the player has unlocked so far (at least 1). */
+    int readUnlockedModules() {
+        try {
+            return Math.max(1, Integer.parseInt(load().getProperty(PROGRESS_KEY, "1").trim()));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    void writeUnlockedModules(int count) {
+        Properties props = load();
+        props.setProperty(PROGRESS_KEY, String.valueOf(Math.max(1, count)));
+        store(props);
     }
 
     void clear(String topic) {
@@ -117,8 +148,16 @@ final class SaveStore {
             if (dir != null) {
                 dir.mkdirs();
             }
-            try (FileOutputStream out = new FileOutputStream(file)) {
+            // Write to a temporary file first and swap it in, so a crash can never leave a half-written save.
+            File temp = new File(file.getPath() + ".tmp");
+            try (FileOutputStream out = new FileOutputStream(temp)) {
                 props.store(out, "Compile Your Knowledge - saved games");
+            }
+            try {
+                Files.move(temp.toPath(), file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
             System.err.println("Could not write save file: " + e);

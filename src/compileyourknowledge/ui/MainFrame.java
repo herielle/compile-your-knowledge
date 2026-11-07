@@ -38,7 +38,9 @@ public class MainFrame extends JFrame {
     private final QuestionBank questionBank = QuestionBank.loadDefault();
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(cardLayout);
-    private final boolean[] theoreticalUnlocked = new boolean[8];
+    private final boolean[] theoreticalUnlocked =
+            new boolean[Math.max(8, questionBank.topics("Theoretical").size())];
+    private final SaveStore progressStore = SaveStore.inUserHome();
     private TopicPanel theoreticalPanel;
     private TopicPanel practicalPanel;
     private QuestionPanel questionPanel;
@@ -48,7 +50,11 @@ public class MainFrame extends JFrame {
     public MainFrame() {
         super("Compile Your Knowledge");
         preloadArt();
-        theoreticalUnlocked[0] = true;
+        // Module 1 is always open; the others stay unlocked from earlier sessions.
+        int unlocked = Math.max(1, progressStore.readUnlockedModules());
+        for (int i = 0; i < unlocked && i < theoreticalUnlocked.length; i++) {
+            theoreticalUnlocked[i] = true;
+        }
         setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         cards.add(new SplashPanel(this), SPLASH);
@@ -128,8 +134,9 @@ public class MainFrame extends JFrame {
         }
         art.parallelStream().forEach(path -> {
             BufferedImage image = ImageLibrary.load(path);
-            if (path.contains("/buttons/")) {
-                ImageButton.prepare(image);
+            if (image != null && path.contains("/buttons/")) {
+                // Keep only the cropped button: the huge transparent original is not needed again.
+                ImageLibrary.replace(path, ImageButton.prepare(image));
             }
         });
     }
@@ -172,6 +179,7 @@ public class MainFrame extends JFrame {
         int next = topicIndex + 1;
         if (topicIndex >= 0 && next < theoreticalUnlocked.length && !theoreticalUnlocked[next]) {
             theoreticalUnlocked[next] = true;
+            progressStore.writeUnlockedModules(next + 1);
             theoreticalPanel.refreshLocks();
             return "Module " + (next + 1) + " unlocked!";
         }

@@ -189,6 +189,9 @@ final class SettingsOverlay extends JComponent {
 
     private void setValueFromX(int i, int x) {
         Rectangle t = trackRect(i);
+        if (t.width <= 0) {
+            return;
+        }
         float v = (float) (x - t.x) / t.width;
         v = Math.max(0f, Math.min(1f, v));
         if (i == 0) {
@@ -203,6 +206,14 @@ final class SettingsOverlay extends JComponent {
 
     @Override
     protected void paintComponent(Graphics g) {
+        if (!open) {
+            // This pane sits over every screen, so it is asked to repaint constantly; skip the work
+            // unless the repaint actually touches the speaker button.
+            Rectangle clip = g.getClipBounds();
+            if (clip != null && !clip.intersects(iconRect())) {
+                return;
+            }
+        }
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);

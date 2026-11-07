@@ -2,6 +2,7 @@ package compileyourknowledge.ui;
 
 import javax.swing.JButton;
 import javax.swing.Timer;
+import java.awt.AlphaComposite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -15,7 +16,9 @@ public class ImageButton extends JButton {
     private static final double EASE = 0.28; // fraction of the remaining distance covered per tick
 
     private BufferedImage source;   // cropped to the button itself
-    private BufferedImage scaled;         // source scaled to the largest size the button can reach
+    private BufferedImage scaled;         // source scaled to the largest size the button can reach (built on first paint)
+    private double scaledDensity = 1.0;   // screen density the scaled copy was built for (2.0 on Retina)
+    private boolean dimWhenDisabled = false;
     private int baseWidth;
     private int baseHeight;
 
@@ -28,6 +31,7 @@ public class ImageButton extends JButton {
         this.source = cropToContent(fullCanvasImage);
 
         setRolloverEnabled(true);
+        setFocusable(false); // keeps Space/Enter from re-pressing the last clicked button
         setContentAreaFilled(false);
         
         setBorderPainted(false);
@@ -59,11 +63,15 @@ public class ImageButton extends JButton {
     public void setImage(BufferedImage image) {
         source = cropToContent(image);
         scaled = null;
-        if (source != null && baseWidth > 0 && baseHeight > 0) {
-            scaled = scaleSmooth(source, (int) Math.round(baseWidth * HOVER_SCALE),
-                    (int) Math.round(baseHeight * HOVER_SCALE));
+        if (source != null) {
             setText("");
         }
+        repaint();
+    }
+
+    /** When true, the button is drawn faded while it is disabled (used for spent lifelines and wrong answers). */
+    public void setDimWhenDisabled(boolean dim) {
+        dimWhenDisabled = dim;
         repaint();
     }
 
@@ -80,11 +88,7 @@ public class ImageButton extends JButton {
        
         baseWidth = width;
         baseHeight = height;
-
-        if (source != null && width > 0 && height > 0) {
-            scaled = scaleSmooth(source, (int) Math.round(width * HOVER_SCALE),
-                    (int) Math.round(height * HOVER_SCALE));
-        }
+        scaled = null; // rebuilt for the new size the next time the button is painted
     }
 
     private void setTargetScale(double value) {
@@ -121,12 +125,22 @@ public class ImageButton extends JButton {
 
     @Override
     protected void paintComponent(Graphics g) {
-        if (scaled == null) {
+        if (source == null || baseWidth <= 0 || baseHeight <= 0) {
             super.paintComponent(g); // fallback: plain text button if the picture is missing
             return;
         }
         Graphics2D g2 = (Graphics2D) g.create();
-       
+        // Scale to real screen pixels, not logical ones, so the button stays sharp on Retina screens.
+        double density = Math.max(1.0, g2.getTransform().getScaleX());
+        if (scaled == null || density != scaledDensity) {
+            scaled = scaleSmooth(source,
+                    Math.max(1, (int) Math.round(baseWidth * HOVER_SCALE * density)),
+                    Math.max(1, (int) Math.round(baseHeight * HOVER_SCALE * density)));
+            scaledDensity = density;
+        }
+        if (dimWhenDisabled && !isEnabled()) {
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f));
+        }
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
@@ -146,8 +160,8 @@ public class ImageButton extends JButton {
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /** Crops a button picture ahead of time so building the button later is instant. Safe to call from any thread. */
-    public static void prepare(BufferedImage img) {
-        cropToContent(img);
+    public static BufferedImage prepare(BufferedImage img) {
+        return cropToContent(img);
     }
 
     private static BufferedImage cropToContent(BufferedImage img) {
@@ -193,6 +207,9 @@ public class ImageButton extends JButton {
             g2.dispose();
         }
         CROP_CACHE.put(img, result);
+        if (result != img) {
+            CROP_CACHE.put(result, result); // cropping an already cropped picture is then instant
+        }
         return result;
     }
 

@@ -6,7 +6,6 @@ import compileyourknowledge.util.ImageLibrary;
 
 import javax.swing.JButton;
 import javax.swing.JPanel;
-import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -28,9 +27,6 @@ import java.util.List;
  */
 public class TopicPanel extends JPanel {
 
-    private static final double ART_W = 2296;
-    private static final double ART_H = 1624;
-
     private static final double[] TITLE = {150, 235};
     private static final double[] CLOSE = {2095, 205, 62, 62};
     private static final double[] INNER = {106, 323, 2084, 1121};   // white body: x, y, w, h
@@ -40,6 +36,7 @@ public class TopicPanel extends JPanel {
     private static final double PADDING = 0.14;      // room around each button for the hover grow
 
     private final MainFrame frame;
+    private final ArtSpace art = new ArtSpace(this);
     private final String branch;
     private final boolean sequential;
     private final BufferedImage background = ImageLibrary.load("resources/images/screens/background.png");
@@ -120,25 +117,9 @@ public class TopicPanel extends JPanel {
 
     // ------------------------------------------------------------------ layout
 
-    private double scale() {
-        return Math.max(getWidth() / ART_W, getHeight() / ART_H);
-    }
-
-    private int sx(double artX) {
-        return (int) Math.round((getWidth() - ART_W * scale()) / 2.0 + artX * scale());
-    }
-
-    private int sy(double artY) {
-        return (int) Math.round((getHeight() - ART_H * scale()) / 2.0 + artY * scale());
-    }
-
-    private int sl(double artLength) {
-        return (int) Math.round(artLength * scale());
-    }
-
     @Override
     public void doLayout() {
-        closeButton.setBounds(sx(CLOSE[0]), sy(CLOSE[1]), sl(CLOSE[2]), sl(CLOSE[3]));
+        closeButton.setBounds(art.sx(CLOSE[0]), art.sy(CLOSE[1]), art.sl(CLOSE[2]), art.sl(CLOSE[3]));
 
         int n = topics.size();
         if (n == 0) {
@@ -158,12 +139,12 @@ public class TopicPanel extends JPanel {
     }
 
     private void place(ImageButton button, double cx, double cy) {
-        int bw = sl(BUTTON_SIZE);
+        int bw = art.sl(BUTTON_SIZE);
         int bh = (int) Math.round(bw * button.aspectRatio());
         int padX = (int) Math.round(bw * PADDING);
         int padY = (int) Math.round(bh * PADDING);
         button.setBaseSize(bw, bh);
-        button.setBounds(sx(cx) - bw / 2 - padX, sy(cy) - bh / 2 - padY, bw + 2 * padX, bh + 2 * padY);
+        button.setBounds(art.sx(cx) - bw / 2 - padX, art.sy(cy) - bh / 2 - padY, bw + 2 * padX, bh + 2 * padY);
     }
 
     // ------------------------------------------------------------------ painting
@@ -183,41 +164,24 @@ public class TopicPanel extends JPanel {
             Theme.paintSky(g2, w, h);
         }
 
-        paintWindow(g2);
+        RetroPainter.paintEmptyWindow(g2, art);
 
-        g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, sl(56))));
+        g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, art.sl(56))));
         g2.setColor(Color.WHITE);
         FontMetrics fm = g2.getFontMetrics();
-        g2.drawString(branch, sx(TITLE[0]), sy(TITLE[1]) + (fm.getAscent() - fm.getDescent()) / 2);
-        g2.dispose();
-    }
+        g2.drawString(branch, art.sx(TITLE[0]), art.sy(TITLE[1]) + (fm.getAscent() - fm.getDescent()) / 2);
 
-    private void fillArt(Graphics2D g2, double x, double y, double w, double h, Color c) {
-        g2.setColor(c);
-        g2.fillRect(sx(x), sy(y), sl(w), sl(h));
-    }
-
-    private void boxArt(Graphics2D g2, double x, double y, double w, double h, double border, Color fill) {
-        fillArt(g2, x, y, w, h, Color.BLACK);
-        fillArt(g2, x + border, y + border, w - 2 * border, h - 2 * border, fill);
-    }
-
-    /** The retro window: grey frame, navy title bar, minimize / maximize / close boxes, white body. */
-    private void paintWindow(Graphics2D g2) {
-        Color grey = new Color(192, 192, 192);
-        boxArt(g2, 80, 145, 2136, 1325, 6, grey);
-        fillArt(g2, 108, 175, 2080, 122, new Color(18, 0, 120));
-        boxArt(g2, INNER[0], INNER[1], INNER[2], INNER[3], 6, Color.WHITE);
-
-        double[] bx = {1907, 2000, 2095};
-        for (double x : bx) {
-            fillArt(g2, x, 205, 62, 62, grey);
+        if (topics.isEmpty()) {
+            // Without this the player just sees an empty window when the question file is missing or broken.
+            g2.setColor(Color.BLACK);
+            g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, Math.max(12, art.sl(44))));
+            String msg = "No questions found for " + branch + ".";
+            String hint = "Check resources/questions/questions.csv";
+            fm = g2.getFontMetrics();
+            int cy = art.sy(INNER[1] + INNER[3] / 2);
+            g2.drawString(msg, art.sx(INNER[0] + INNER[2] / 2) - fm.stringWidth(msg) / 2, cy);
+            g2.drawString(hint, art.sx(INNER[0] + INNER[2] / 2) - fm.stringWidth(hint) / 2, cy + fm.getHeight() + 8);
         }
-        fillArt(g2, 1925, 245, 28, 8, Color.BLACK);
-        boxArt(g2, 2018, 222, 26, 26, 6, grey);
-        g2.setColor(Color.BLACK);
-        g2.setStroke(new BasicStroke(Math.max(2f, (float) (7 * scale()))));
-        g2.drawLine(sx(2112), sy(222), sx(2142), sy(250));
-        g2.drawLine(sx(2142), sy(222), sx(2112), sy(250));
+        g2.dispose();
     }
 }
