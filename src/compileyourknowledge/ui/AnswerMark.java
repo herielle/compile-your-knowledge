@@ -6,11 +6,12 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
-/** A small overlay that draws the correct check or the wrong X on top of a letter button. */
+//  the little check or x picture that sits on top of a letter button
 final class AnswerMark extends JComponent {
 
     private BufferedImage image;
 
+    // changes the picture shown (pass null to hide it)
     void setImage(BufferedImage img) {
         if (img != image) {
             image = img;
@@ -18,9 +19,10 @@ final class AnswerMark extends JComponent {
         }
     }
 
+    // always false so clicks go through to the letter button underneath
     @Override
     public boolean contains(int x, int y) {
-        return false; // clicks pass straight through to the letter button below
+        return false;
     }
 
     @Override

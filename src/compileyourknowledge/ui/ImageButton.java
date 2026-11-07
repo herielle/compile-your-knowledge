@@ -5,19 +5,28 @@ import javax.swing.Timer;
 import java.awt.AlphaComposite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
+// a button drawn from a picture. it grows a little on hover and shrinks a little when pressed. 
 
 public class ImageButton extends JButton {
 
     private static final double HOVER_SCALE = 1.10;
     private static final double PRESSED_SCALE = 0.96;
-    private static final double EASE = 0.28; // fraction of the remaining distance covered per tick
+    private static final double EASE = 0.28; // how much of the remaining distance is covered each tick
 
-    private BufferedImage source;   // cropped to the button itself
-    private BufferedImage scaled;         // source scaled to the largest size the button can reach (built on first paint)
-    private double scaledDensity = 1.0;   // screen density the scaled copy was built for (2.0 on Retina)
+    // cropped pictures we already made, so the same picture is never scanned pixel by pixel twice
+    private static final Map<BufferedImage, BufferedImage> CROP_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    private BufferedImage source; // the picture, cropped to just the button
+    private BufferedImage scaled;  // source resized to the biggest size the button can reach
+    private double scaledDensity = 1.0; // screen density the scaled copy was made for (2.0 on retina)
     private boolean dimWhenDisabled = false;
     private int baseWidth;
     private int baseHeight;
@@ -31,22 +40,23 @@ public class ImageButton extends JButton {
         this.source = cropToContent(fullCanvasImage);
 
         setRolloverEnabled(true);
-        setFocusable(false); // keeps Space/Enter from re-pressing the last clicked button
+        setFocusable(false); // stops space or enter from pressing the last clicked button again
+        
         setContentAreaFilled(false);
-        
         setBorderPainted(false);
+        
         setFocusPainted(false);
-        
         setOpaque(false);
-        setMargin(new java.awt.Insets(0, 0, 0, 0));
         
-       
-            if (source != null) {
-                setText(""); // the picture already contains the label
-            }
+        setMargin(new Insets(0, 0, 0, 0));
+
+        if (source != null) {
+            setText(""); // the picture already has the label in it
+        }
 
         animation = new Timer(15, e -> step());
 
+        // pick the size to animate towards: pressed, hovered or normal
         getModel().addChangeListener(e -> {
             if (getModel().isPressed()) {
                 setTargetScale(PRESSED_SCALE);
@@ -58,8 +68,7 @@ public class ImageButton extends JButton {
         });
     }
 
-
-    /** Replaces the visible image while keeping the same button instance and listeners. */
+    // swaps the picture but keeps the same button and its listeners
     public void setImage(BufferedImage image) {
         source = cropToContent(image);
         scaled = null;
@@ -69,28 +78,28 @@ public class ImageButton extends JButton {
         repaint();
     }
 
-    /** When true, the button is drawn faded while it is disabled (used for spent lifelines and wrong answers). */
+    // when true, the button looks faded while disabled (used for used lifelines and wrong answers)
     public void setDimWhenDisabled(boolean dim) {
         dimWhenDisabled = dim;
         repaint();
     }
 
-    /** Height divided by width of the cropped button, used by the layout to size it. */
+    // height divided by width of the cropped picture. layouts use it to size the button
     public double aspectRatio() {
         return source == null ? 0.28 : (double) source.getHeight() / source.getWidth();
     }
 
-    /** Sets the resting size of the visible button. The component itself should be a bit larger. */
+    // sets the normal size of the visible button. the component itself should be a bit bigger
     public void setBaseSize(int width, int height) {
         if (width == baseWidth && height == baseHeight) {
             return;
         }
-       
         baseWidth = width;
         baseHeight = height;
-        scaled = null; // rebuilt for the new size the next time the button is painted
+        scaled = null; // gets rebuilt for the new size on the next paint
     }
 
+    // sets the size to animate towards and starts the animation if it isn't running
     private void setTargetScale(double value) {
         targetScale = value;
         if (!animation.isRunning()) {
@@ -98,9 +107,10 @@ public class ImageButton extends JButton {
         }
     }
 
+    // one animation tick: moves the current size a bit closer to the target size.
     private void step() {
         double diff = targetScale - scale;
-       
+
         if (Math.abs(diff) < 0.002) {
             scale = targetScale;
             animation.stop();
@@ -110,28 +120,29 @@ public class ImageButton extends JButton {
         repaint();
     }
 
-   
+    // only the visible picture counts as clickable not the empty padding around it
     @Override
     public boolean contains(int x, int y) {
         double s = Math.max(scale, 1.0);
         double w = baseWidth * s;
-        
         double h = baseHeight * s;
         double left = (getWidth() - w) / 2.0;
-       
         double top = (getHeight() - h) / 2.0;
         return x >= left && x <= left + w && y >= top && y <= top + h;
     }
 
+    // draws the picture centred at the current size. falls back to a normal text button if there is no picture
     @Override
     protected void paintComponent(Graphics g) {
         if (source == null || baseWidth <= 0 || baseHeight <= 0) {
-            super.paintComponent(g); // fallback: plain text button if the picture is missing
+            super.paintComponent(g);
             return;
         }
         Graphics2D g2 = (Graphics2D) g.create();
-        // Scale to real screen pixels, not logical ones, so the button stays sharp on Retina screens.
+
+        // resize using real screen pixels so the button stays sharp on retina screens
         double density = Math.max(1.0, g2.getTransform().getScaleX());
+       
         if (scaled == null || density != scaledDensity) {
             scaled = scaleSmooth(source,
                     Math.max(1, (int) Math.round(baseWidth * HOVER_SCALE * density)),
@@ -141,29 +152,26 @@ public class ImageButton extends JButton {
         if (dimWhenDisabled && !isEnabled()) {
             g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f));
         }
+
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
         int w = (int) Math.round(baseWidth * scale);
+        
         int h = (int) Math.round(baseHeight * scale);
-       
         int x = (getWidth() - w) / 2;
         int y = (getHeight() - h) / 2;
+        
         g2.drawImage(scaled, x, y, w, h, null);
         g2.dispose();
     }
 
-    
-    // Cropped versions of images already processed (keyed by the image object itself), so a picture
-    // used again, such as a lock button redrawn on every visit, is never re-scanned pixel by pixel.
-    private static final java.util.Map<BufferedImage, BufferedImage> CROP_CACHE =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
-
-    /** Crops a button picture ahead of time so building the button later is instant. Safe to call from any thread. */
+    // crops a button picture ahead of time so making the button later is quick. safe to call from any thread
     public static BufferedImage prepare(BufferedImage img) {
         return cropToContent(img);
     }
 
+    // cuts away the empty (transparent or near white) edges around the button picture
     private static BufferedImage cropToContent(BufferedImage img) {
         if (img == null) {
             return null;
@@ -174,20 +182,24 @@ public class ImageButton extends JButton {
         }
         int w = img.getWidth();
         int h = img.getHeight();
-        int[] px = img.getRGB(0, 0, w, h, null, 0, w); // one bulk read instead of w*h getRGB calls
+        int[] px = img.getRGB(0, 0, w, h, null, 0, w); // read all pixels at once, much faster than one by one
+        
         int minX = w;
         int minY = h;
         int maxX = -1;
+        
         int maxY = -1;
         for (int y = 0; y < h; y++) {
             int row = y * w;
             for (int x = 0; x < w; x++) {
                 int argb = px[row + x];
                 int alpha = (argb >>> 24) & 0xFF;
+                
                 int r = (argb >> 16) & 0xFF;
                 int gr = (argb >> 8) & 0xFF;
                 int b = argb & 0xFF;
-                boolean visible = alpha > 10 && (r + gr + b) < 720; // not transparent, not near-white
+                
+                boolean visible = alpha > 10 && (r + gr + b) < 720; // not transparent and not near white
                 if (visible) {
                     if (x < minX) minX = x;
                     if (y < minY) minY = y;
@@ -196,9 +208,11 @@ public class ImageButton extends JButton {
                 }
             }
         }
+        
         BufferedImage result;
+        
         if (maxX < minX || maxY < minY) {
-            result = img;
+            result = img; // nothing visible found, keep the picture as it is
         } else {
             result = new BufferedImage(maxX - minX + 1, maxY - minY + 1, BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2 = result.createGraphics();
@@ -208,29 +222,30 @@ public class ImageButton extends JButton {
         }
         CROP_CACHE.put(img, result);
         if (result != img) {
-            CROP_CACHE.put(result, result); // cropping an already cropped picture is then instant
+            CROP_CACHE.put(result, result); // so cropping the cropped picture again is instant
         }
         return result;
     }
 
+    // shrinks a picture in half steps first, which looks smoother than one big jump.
     private static BufferedImage scaleSmooth(BufferedImage img, int targetW, int targetH) {
         BufferedImage current = img;
         int w = img.getWidth();
         int h = img.getHeight();
-        
-            while (w / 2 >= targetW && h / 2 >= targetH) {
-                w /= 2;
-                h /= 2;
-                current = resize(current, w, h);
-            }
 
+        while (w / 2 >= targetW && h / 2 >= targetH) {
+            w /= 2;
+            h /= 2;
+            current = resize(current, w, h);
+        }
         return resize(current, targetW, targetH);
     }
 
+    // makes a resized copy of a picture.
     private static BufferedImage resize(BufferedImage img, int w, int h) {
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = out.createGraphics();
-       
+        
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         

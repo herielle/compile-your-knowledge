@@ -7,22 +7,21 @@ import javax.swing.JButton;
 import javax.swing.JPanel;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A full-screen picture (2000x1414 artwork) with invisible clickable areas on top of it.
- * How to Play and both Credits pages use this: the window, text, and arrow are all in the
- * artwork, and the hotspots sit exactly over the X in the title bar and the arrow button.
- */
+    /**
+     * a full screen picture (2000 x 1414 artwork).
+     * how to play and both credits pages use this. the window, text and arrow are all in the picture,
+     * so the spots just sit over the x in the title bar and the arrow button.
+     */
+
 public class ScreenPanel extends JPanel {
 
     private static final double ART_W = 2000;
     private static final double ART_H = 1414;
 
-    // The X in the title bar, drawn in the artwork (same spot on every screen).
     private static final double CLOSE_X = 1824;
     private static final double CLOSE_Y = 181;
     private static final double CLOSE_SIZE = 54;
@@ -50,7 +49,7 @@ public class ScreenPanel extends JPanel {
                 () -> frame.showScreen(MainFrame.SPLASH));
     }
 
-    /** Adds an invisible button over the given rectangle (in 2000x1414 artwork coordinates). */
+    // adds an invisible button over a spot in the artwork (2000 x 1414 units)
     public final void addHotspot(double x, double y, double w, double h, String tooltip, Runnable action) {
         JButton button = new JButton();
         button.setOpaque(false);
@@ -63,6 +62,7 @@ public class ScreenPanel extends JPanel {
         add(button);
     }
 
+    // moves every hotspot so it still lines up with the picture after a resize
     @Override
     public void doLayout() {
         double scale = Math.max(getWidth() / ART_W, getHeight() / ART_H);
@@ -77,16 +77,15 @@ public class ScreenPanel extends JPanel {
         }
     }
 
+    // draws the picture, or the sky gradient if the picture is missing
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
-        int w = getWidth();
-        int h = getHeight();
         if (background != null) {
-            Backdrop.paint(g2, background, w, h); // scaled once per size, not on every repaint
+            Backdrop.paint(g2, background, getWidth(), getHeight());
         } else {
-            Theme.paintSky(g2, w, h);
+            Theme.paintSky(g2, getWidth(), getHeight());
         }
         g2.dispose();
     }

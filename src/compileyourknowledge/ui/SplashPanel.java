@@ -13,24 +13,25 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
+    /** the main menu: start, how to play, credits and exit. */
 
 public class SplashPanel extends JPanel {
 
-    // Swap this for resources/images/SplashScreen.png if you want the version with the stars.
+   
     private static final String SPLASH_IMAGE = "resources/images/screens/MainScreen.png";
     private static final String TITLE = "Compile Your Knowledge";
 
-  
-    private static final double CENTER_X = 0.508;      
-    private static final double BUTTON_WIDTH = 0.187;  
+   
+    private static final double CENTER_X = 0.508;
+    private static final double BUTTON_WIDTH = 0.187;
     private static final double[] CENTER_Y = {0.518, 0.621, 0.722, 0.826};
-    private static final double PADDING = 0.20;       
+    private static final double PADDING = 0.20; // extra room around each button so it can grow on hover
 
     private final BufferedImage background = ImageLibrary.load(SPLASH_IMAGE);
     private final ImageButton[] buttons;
 
     public SplashPanel(MainFrame frame) {
-        setLayout(null); // buttons are positioned by doLayout() below
+        setLayout(null); // doLayout() places the buttons
 
         ImageButton startButton = new ImageButton(
                 ImageLibrary.load("resources/images/buttons/start.png"), "Start");
@@ -42,7 +43,7 @@ public class SplashPanel extends JPanel {
                 ImageLibrary.load("resources/images/buttons/exit.png"), "Exit");
 
         startButton.addActionListener(e -> {
-            frame.showScreen(MainFrame.START); // switch screens first so sound can never block it
+            frame.showScreen(MainFrame.START); // switch screens first so a sound problem can never block it
             try {
                 SoundManager.playGameplay(); // gameplay music loops from here on
             } catch (Throwable t) {
@@ -50,7 +51,6 @@ public class SplashPanel extends JPanel {
             }
         });
         howToPlayButton.addActionListener(e -> frame.showScreen(MainFrame.HOW_TO_PLAY));
-        
         creditsButton.addActionListener(e -> frame.showScreen(MainFrame.CREDITS));
         exitButton.addActionListener(e -> System.exit(0));
 
@@ -60,19 +60,17 @@ public class SplashPanel extends JPanel {
         }
     }
 
+    // puts the four buttons in a column using the screen size
     @Override
     public void doLayout() {
         int w = getWidth();
         int h = getHeight();
         for (int i = 0; i < buttons.length; i++) {
-
             ImageButton button = buttons[i];
             int bw = (int) Math.round(w * BUTTON_WIDTH);
             int bh = (int) Math.round(bw * button.aspectRatio());
-            
             int padX = (int) Math.round(bw * PADDING);
             int padY = (int) Math.round(bh * PADDING);
-
             int cx = (int) Math.round(w * CENTER_X);
             int cy = (int) Math.round(h * CENTER_Y[i]);
 
@@ -81,6 +79,7 @@ public class SplashPanel extends JPanel {
         }
     }
 
+    // draws the background picture. if it is missing, draws the sky with the game title instead
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -95,12 +94,9 @@ public class SplashPanel extends JPanel {
         if (background != null) {
             Backdrop.paint(g2, background, w, h);
         } else {
-            // Fallback so the title still shows if the picture is missing.
             Theme.paintSky(g2, w, h);
             g2.setFont(new Font(Font.MONOSPACED, Font.BOLD, 48));
-            
             FontMetrics fm = g2.getFontMetrics();
-            
             g2.setColor(Color.WHITE);
             g2.drawString(TITLE, (w - fm.stringWidth(TITLE)) / 2, h / 2);
         }

@@ -20,10 +20,16 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
+    /** the main window. 
+     * it holds every screen as a card and switches between them. */
+
 public class MainFrame extends JFrame {
+
     public static final String SPLASH = "SPLASH";
     public static final String START = "START";
     public static final String THEORETICAL = "THEORETICAL";
@@ -41,16 +47,17 @@ public class MainFrame extends JFrame {
     private final boolean[] theoreticalUnlocked =
             new boolean[Math.max(8, questionBank.topics("Theoretical").size())];
     private final SaveStore progressStore = SaveStore.inUserHome();
-    private TopicPanel theoreticalPanel;
-    private TopicPanel practicalPanel;
-    private QuestionPanel questionPanel;
     private final SettingsOverlay settings = new SettingsOverlay();
+    private final TopicPanel theoreticalPanel;
+    private final TopicPanel practicalPanel;
+    private final QuestionPanel questionPanel;
     private boolean fullScreen = false;
 
     public MainFrame() {
         super("Compile Your Knowledge");
         preloadArt();
-        // Module 1 is always open; the others stay unlocked from earlier sessions.
+
+        // module 1 is always open. the others stay unlocked from earlier sessions
         int unlocked = Math.max(1, progressStore.readUnlockedModules());
         for (int i = 0; i < unlocked && i < theoreticalUnlocked.length; i++) {
             theoreticalUnlocked[i] = true;
@@ -59,11 +66,14 @@ public class MainFrame extends JFrame {
 
         cards.add(new SplashPanel(this), SPLASH);
         cards.add(new PlayPanel(this), START);
+        
         theoreticalPanel = new TopicPanel(this, "Theoretical", true, questionBank);
         practicalPanel = new TopicPanel(this, "Practical", false, questionBank);
+        
         cards.add(theoreticalPanel, THEORETICAL);
         cards.add(practicalPanel, PRACTICAL);
-        // One question window for the whole game; startTopic() refills it for each topic.
+
+        // one question window for the whole game. startTopic() refills it for each topic
         questionPanel = new QuestionPanel(this, "Question", () -> new Question[0]);
         cards.add(questionPanel, QUESTION);
         cards.add(new ScreenPanel(this, "resources/images/screens/HowToPlayScreen.png"), HOW_TO_PLAY);
@@ -77,7 +87,10 @@ public class MainFrame extends JFrame {
 
         cards.setPreferredSize(new Dimension(1000, 707));
         setContentPane(cards);
-        // The sound settings float above every screen as the glass pane (setGlassPane hides it, so show it again).
+
+        // the sound settings float above every screen as the glass pane.
+        // setGlassPane hides it, so it has to be shown again
+
         setGlassPane(settings);
         settings.setVisible(true);
         applyCustomCursor();
@@ -85,21 +98,7 @@ public class MainFrame extends JFrame {
         setResizable(false);
         setLocationRelativeTo(null);
 
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleFullScreen");
-        getRootPane().getActionMap().put("toggleFullScreen", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { setFullScreen(!fullScreen); }
-        });
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "leaveFullScreen");
-        getRootPane().getActionMap().put("leaveFullScreen", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) {
-                if (settings.isOpen()) settings.close();   // Esc closes the sound dialog first
-                else if (fullScreen) setFullScreen(false);
-            }
-        });
-        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_M, 0), "toggleSound");
-        getRootPane().getActionMap().put("toggleSound", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { settings.toggle(); }
-        });
+        setupKeys();
 
         showScreen(SPLASH);
         setFullScreen(true);
@@ -107,108 +106,170 @@ public class MainFrame extends JFrame {
         SoundManager.playOpening();
     }
 
-    /**
-     * Decodes and crops all artwork in parallel before the screens are built. The button pictures sit on
-     * very large transparent canvases, so doing this one after another made start-up slow.
-     */
+    // sets up the keyboard shortcuts: f11 for full screen, esc to close things, m for sound
+    private void setupKeys() {
+        bindKey(KeyEvent.VK_F11, "toggleFullScreen", () -> setFullScreen(!fullScreen));
+        bindKey(KeyEvent.VK_ESCAPE, "leaveFullScreen", () -> {
+            if (settings.isOpen()) {
+                settings.close();   // esc closes the sound dialog first
+            } else if (fullScreen) {
+                setFullScreen(false);
+            }
+        });
+        bindKey(KeyEvent.VK_M, "toggleSound", settings::toggle);
+    }
+
+    // makes a key press run an action anywhere in the window
+    private void bindKey(int keyCode, String name, Runnable action) {
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke(keyCode, 0), name);
+        getRootPane().getActionMap().put(name, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+        /**
+         * loads and crops all the pictures at the same time before the screens are built
+         * the button pictures are on huge transparent canvases, so doing them one by one made start-up slow
+         */
+
     private static void preloadArt() {
-        java.util.List<String> art = new java.util.ArrayList<>(java.util.List.of(
+        List<String> art = new ArrayList<>(List.of(
                 "resources/images/screens/background.png", "resources/images/screens/MainScreen.png",
                 "resources/images/screens/PlayScreen.png", "resources/images/screens/HowToPlayScreen.png",
                 "resources/images/screens/CreditsDevelopers.png", "resources/images/screens/CreditsInspiration.png",
                 "resources/images/heart.png", "resources/images/correct.png", "resources/images/wrong.png",
                 "resources/images/cursor.png"));
+       
         String[] buttons = {"start", "howToPlay", "credits", "exit", "theoretical", "practical",
                 "a_letter", "b_letter", "c_letter", "d_letter", "peek_button", "copy_button", "save_button"};
+
         for (String name : buttons) {
             art.add("resources/images/buttons/" + name + ".png");
         }
+
         for (int i = 1; i <= 8; i++) {
             art.add("resources/images/buttons/theoreticalButtons/module" + i + ".png");
             if (i > 1) {
                 art.add("resources/images/buttons/theoreticalButtons/module" + i + "-locked.png");
             }
         }
+
         for (String name : new String[]{"C", "java", "pyton", "haskell"}) {
             art.add("resources/images/buttons/practicalButtons/" + name + ".png");
         }
+
         art.parallelStream().forEach(path -> {
             BufferedImage image = ImageLibrary.load(path);
             if (image != null && path.contains("/buttons/")) {
-                // Keep only the cropped button: the huge transparent original is not needed again.
+                // keep only the cropped button. the huge original isn't needed again
                 ImageLibrary.replace(path, ImageButton.prepare(image));
             }
         });
     }
 
+    // true if the theoretical module at this position can be played. 
     public boolean isTheoreticalUnlocked(int index) {
         return index >= 0 && index < theoreticalUnlocked.length && theoreticalUnlocked[index];
     }
 
     /**
-     * Starts one stage: up to 10 questions from the topic, ordered easy -> medium -> hard, random inside
-     * each difficulty, with the four choices shuffled. Reuses the single question window.
+     * starts one stage with up to 10 questions from the topic: easy first, then medium, then hard.
+     * questions are random inside each difficulty and the four choices are shuffled.
      */
+
     public void startTopic(String branch, String topic) {
         startTopic(branch, topic, QuestionPanel.MAX_LIVES);
     }
 
-    /** Same, but the player begins with the given number of hearts (carried over from the last module). */
+    // same as above, but the player starts with this many hearts (carried over from the last module)
     private void startTopic(String branch, String topic, int startLives) {
         boolean theoretical = branch.equalsIgnoreCase("Theoretical");
-        int topicIndex = questionBank.topics(branch).indexOf(topic);
+        List<String> topics = questionBank.topics(branch);
+        
+        int topicIndex = topics.indexOf(topic);
+       
         String title = theoretical && topicIndex >= 0
                 ? "Module " + (topicIndex + 1) + " - " + topic
                 : branch + " - " + topic;
+
+        // winning a theoretical module unlocks the next one
         Supplier<String> onWin = theoretical ? () -> unlockAfter(topicIndex) : null;
-        // After a win, "Next Level" opens the following module (only for the theoretical modules).
-        java.util.List<String> topics = questionBank.topics(branch);
+
+        // "next level" after a win opens the following module (theoretical only)
+       
         int next = topicIndex + 1;
         IntConsumer onNext = theoretical && topicIndex >= 0 && next < topics.size()
                 && next < theoreticalUnlocked.length
                 ? hearts -> startTopic(branch, topics.get(next), hearts)
                 : null;
+
         questionPanel.startTopic(title,
                 () -> questionBank.drawStage(branch, topic, QUESTIONS_PER_STAGE),
                 theoretical ? THEORETICAL : PRACTICAL, onWin, onNext, startLives);
         showScreen(QUESTION);
     }
 
-    /** Clearing module i opens module i + 1. Returns a line for the Victory text, or null. */
+    // clearing module i unlocks module i + 1. returns a line for the victory text, or null if nothing new unlocked. 
     private String unlockAfter(int topicIndex) {
         int next = topicIndex + 1;
         if (topicIndex >= 0 && next < theoreticalUnlocked.length && !theoreticalUnlocked[next]) {
             theoreticalUnlocked[next] = true;
             progressStore.writeUnlockedModules(next + 1);
+            
             theoreticalPanel.refreshLocks();
             return "Module " + (next + 1) + " unlocked!";
         }
         return null;
     }
 
+    // switches to the screen with this name. 
     public void showScreen(String name) {
-        if (THEORETICAL.equals(name)) theoreticalPanel.refreshLocks();
+        if (THEORETICAL.equals(name)) {
+            theoreticalPanel.refreshLocks();
+        }
         cardLayout.show(cards, name);
     }
 
+    // turns full screen on or off 
     public void setFullScreen(boolean on) {
         GraphicsDevice device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         fullScreen = on;
         if (on) {
-            dispose(); setUndecorated(true);
-            if (device.isFullScreenSupported()) device.setFullScreenWindow(this);
-            else { setExtendedState(MAXIMIZED_BOTH); setVisible(true); }
+            dispose();
+            setUndecorated(true);
+            if (device.isFullScreenSupported()) {
+                device.setFullScreenWindow(this);
+            } else {
+                setExtendedState(MAXIMIZED_BOTH);
+                setVisible(true);
+            }
         } else {
-            if (device.getFullScreenWindow() == this) device.setFullScreenWindow(null);
-            dispose(); setUndecorated(false); setExtendedState(NORMAL); pack(); setLocationRelativeTo(null); setVisible(true);
+            if (device.getFullScreenWindow() == this) {
+                device.setFullScreenWindow(null);
+            }
+            dispose();
+            setUndecorated(false);
+            setExtendedState(NORMAL);
+            pack();
+            setLocationRelativeTo(null);
+            setVisible(true);
         }
-        requestFocus(); applyCustomCursor();
+        requestFocus();
+        applyCustomCursor();
     }
 
+    // customized cursor 
     private void applyCustomCursor() {
         BufferedImage img = ImageLibrary.load("resources/images/cursor.png");
-        if (img == null) return;
+        if (img == null) {
+            return;
+        }
         Cursor custom = Toolkit.getDefaultToolkit().createCustomCursor(img, new Point(0, 0), "custom");
-        setCursor(custom); cards.setCursor(custom);
+        setCursor(custom);
+        cards.setCursor(custom);
     }
 }

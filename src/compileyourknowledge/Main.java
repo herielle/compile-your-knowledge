@@ -7,7 +7,6 @@ import javax.swing.UIManager;
 
 public class Main {
     public static void main(String[] args) {
-        // Metal look and feel keeps the custom buttons identical on macOS and Windows.
         try {
             UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
         } catch (Exception e) {

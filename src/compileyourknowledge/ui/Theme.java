@@ -5,7 +5,7 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.LinearGradientPaint;
 
-/** Shared colors, fonts, and the sky-and-hills gradient used behind the info screens. */
+    /** shared colors and fonts, plus the sky and hills gradient used when a background picture is missing. */
 public final class Theme {
 
     public static final Color TITLE_BAR = new Color(0, 0, 128);
@@ -13,6 +13,8 @@ public final class Theme {
 
     private Theme() {
     }
+
+    // fills the area with a simple sky on top and green hills at the bottom
 
     public static void paintSky(Graphics2D g2, int width, int height) {
         if (height <= 0) {

@@ -7,9 +7,10 @@ import java.io.IOException;
 import java.util.Properties;
 
 /**
- * The player's volume choices for background music and sound effects (0.0 = off, 1.0 = full).
- * They are remembered between sessions in a small file in the user's home folder.
+ * the player's volume for music and sound effects (0.0 = off, 1.0 = full).
+ * they are remembered between sessions in a small file in the user's home folder.
  */
+
 public final class SoundSettings {
 
     private static final File FILE =
@@ -25,30 +26,36 @@ public final class SoundSettings {
     private SoundSettings() {
     }
 
+    // music volume from 0 to 1
     public static float getMusic() {
         return music;
     }
 
+    // sound effects volume from 0 to 1
     public static float getEffects() {
         return effects;
     }
 
+    // sets the music volume (kept between 0 and 1)
     public static void setMusic(float value) {
         music = clamp(value);
     }
 
+    // sets the sound effects volume (kept between 0 and 1)
     public static void setEffects(float value) {
         effects = clamp(value);
     }
 
     /**
-     * Turns a slider value into the loudness factor that is really applied. Squaring it makes the
-     * slider feel even to the ear (50% sounds about half as loud, not almost full volume).
+     * turns a slider value into the loudness that is really used. squaring it makes the slider
+     * feel even to the ear (50% sounds about half as loud, not almost full).
      */
+
     public static float gain(float sliderValue) {
         return sliderValue * sliderValue;
     }
 
+    // saves both volumes to the settings file
     public static synchronized void save() {
         Properties props = new Properties();
         props.setProperty("music", String.valueOf(Math.round(music * 100)));
@@ -66,6 +73,7 @@ public final class SoundSettings {
         }
     }
 
+    // reads the volumes from the settings file, if it exists. runs once when the class loads
     private static void load() {
         if (!FILE.exists()) {
             return;
@@ -80,6 +88,7 @@ public final class SoundSettings {
         }
     }
 
+    // keeps a value between 0 and 1. a broken value falls back to full volume
     private static float clamp(float v) {
         if (Float.isNaN(v)) {
             return 1f;
