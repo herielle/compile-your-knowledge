@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -56,7 +57,8 @@ public class QuestionPanel extends JPanel {
     // ---- game rules ---------------------------------------------------------------
     // Peek and Copy can each be used once per game (independently of each other).
     // Save is not limited: it can be used any time the player still has hearts.
-    private static final int MAX_LIVES = 3;
+    /** Hearts at the start of a fresh topic; moving on to the next module keeps whatever is left. */
+    public static final int MAX_LIVES = 3;
     private static final int POINTS_PER_LEVEL = 100;
     private static final int NEXT_QUESTION_DELAY_MS = 900;
 
@@ -71,6 +73,8 @@ public class QuestionPanel extends JPanel {
     private String backScreen = MainFrame.START;
     /** Called when a round is won; may unlock the next module and return a line to show, or null. */
     private Supplier<String> onWin;
+    /** Starts the next module with the hearts the player has left; null when there is no next module. */
+    private IntConsumer onNextLevel;
     private Question[] questions = new Question[0];
 
     private final BufferedImage background = ImageLibrary.load("resources/images/screens/background.png");
@@ -179,12 +183,14 @@ public class QuestionPanel extends JPanel {
      * panel (and no new copy of the artwork) is created per round.
      */
     public void startTopic(String windowTitle, Supplier<Question[]> questionSource,
-                           String backScreen, Supplier<String> onWin) {
+                           String backScreen, Supplier<String> onWin,
+                           IntConsumer onNextLevel, int startLives) {
         this.windowTitle = windowTitle;
         this.questionSource = questionSource;
         this.backScreen = backScreen;
         this.onWin = onWin;
-        startRound();
+        this.onNextLevel = onNextLevel;
+        startRound(startLives);
         offerResume();
     }
 
@@ -309,9 +315,14 @@ public class QuestionPanel extends JPanel {
     // ------------------------------------------------------------------ round flow
 
     private void startRound() {
+        startRound(MAX_LIVES);
+    }
+
+    /** Starts a round with the given number of hearts (fewer than the maximum when carried over). */
+    private void startRound(int startLives) {
         stopTimer();
         current = 0;
-        lives = MAX_LIVES;
+        lives = Math.max(1, Math.min(MAX_LIVES, startLives));
         score = 0;
         peekUsed = false;
         copyUsed = false;
@@ -403,9 +414,16 @@ public class QuestionPanel extends JPanel {
             textArea.setText("VICTORY!\n\nYou cleared every question in this topic.\n\nFinal score: " + score
                     + (unlocked == null ? "" : "\n\n" + unlocked));
             textArea.setCaretPosition(0);
-            overlay.show(new String[]{"You Win!"}, unlocked, score,
-                    new String[]{"Start Again", "Exit"},
-                    new Runnable[]{this::startRound, () -> System.exit(0)});
+            if (onNextLevel != null) {
+                final int heartsLeft = lives;   // the next module starts with exactly these hearts
+                overlay.show(new String[]{"You Win!"}, unlocked, score,
+                        new String[]{"Next Level", "Exit"},
+                        new Runnable[]{() -> onNextLevel.accept(heartsLeft), () -> System.exit(0)});
+            } else {
+                overlay.show(new String[]{"You Win!"}, unlocked, score,
+                        new String[]{"Start Again", "Exit"},
+                        new Runnable[]{this::startRound, () -> System.exit(0)});
+            }
         } else {
             textArea.setText("GAME OVER\n\nYou ran out of hearts.\n\nScore: " + score
                     + "\nFinal score: " + score);

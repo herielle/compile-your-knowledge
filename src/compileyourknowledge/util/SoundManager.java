@@ -10,6 +10,8 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.DataLine;
+import javax.sound.sampled.FloatControl;
+import javax.sound.sampled.SourceDataLine;
 import javax.swing.AbstractButton;
 import javax.swing.SwingUtilities;
 import java.awt.AWTEvent;
@@ -120,6 +122,9 @@ public final class SoundManager {
 
     /** Plays a short effect. Uses the ready-made line when there is one, so it starts at once. */
     private static void playEffect(String path) {
+        if (SoundSettings.getEffects() <= 0f) {
+            return; // effects are turned off
+        }
         Effect effect = EFFECTS.get(path);
         if (effect != null) {
             effect.play();
@@ -248,8 +253,19 @@ public final class SoundManager {
 
         private void restart(Clip c) {
             c.stop();
+            applyVolume(c);
             c.setFramePosition(0);
             c.start();
+        }
+
+        /** Sets the line's gain from the sound-effects slider just before it plays. */
+        private void applyVolume(Clip c) {
+            if (c.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                FloatControl gain = (FloatControl) c.getControl(FloatControl.Type.MASTER_GAIN);
+                double factor = Math.max(SoundSettings.gain(SoundSettings.getEffects()), 0.0001f);
+                float db = (float) (20.0 * Math.log10(factor));
+                gain.setValue(Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), db)));
+            }
         }
     }
 
@@ -309,13 +325,18 @@ public final class SoundManager {
         return in == null ? null : new BufferedInputStream(in);
     }
 
-    /** One playing sound on its own thread. */
+    /**
+     * One music track on its own thread. It is decoded here instead of by JLayer's Player so the
+     * volume slider can change the loudness while the music is playing.
+     */
     private static final class Track implements Runnable {
+        private static final double BUFFER_SECONDS = 0.2; // also how quickly a volume change is heard
+
         private final String path;
         private final boolean loop;
         private final Thread thread;
-        private Player player;
         private volatile boolean stopped = false;
+        private volatile SourceDataLine line;
 
         Track(String path, boolean loop) {
             this.path = path;
@@ -338,15 +359,14 @@ public final class SoundManager {
 
         void stop() {
             stopped = true;
-            final Player p;
-            synchronized (this) {
-                p = player;
-            }
-            if (p != null) {
-                // close() can wait for audio to drain, so never do it on the UI thread
+            final SourceDataLine l = line;
+            if (l != null) {
+                // closing can wait for audio to drain, so never do it on the UI thread
                 Thread closer = new Thread(() -> {
                     try {
-                        p.close(); // makes the blocking play() call return
+                        l.stop();
+                        l.flush();
+                        l.close(); // makes a blocked write() return
                     } catch (Throwable ignored) {
                         // nothing to do
                     }
@@ -356,34 +376,85 @@ public final class SoundManager {
             }
         }
 
-        private synchronized boolean register(Player p) {
-            if (stopped) {
-                p.close();
-                return false;
-            }
-            player = p;
-            return true;
-        }
-
         @Override
         public void run() {
-            do {
-                try (InputStream in = open(path)) {
-                    if (in == null) {
-                        System.err.println("WARNING: could not load sound '" + path
-                                + "'. Check the file name and the folder.");
-                        return;
+            try {
+                do {
+                    try (InputStream in = open(path)) {
+                        if (in == null) {
+                            System.err.println("WARNING: could not load sound '" + path
+                                    + "'. Check the file name and the folder.");
+                            return;
+                        }
+                        playStream(in);
                     }
-                    Player p = new Player(in);
-                    if (!register(p)) {
-                        return;
-                    }
-                    p.play(); // blocks until the track ends or stop() is called
-                } catch (Throwable e) {
-                    System.err.println("Sound playback failed for '" + path + "': " + e.getMessage());
-                    return;
+                } while (loop && !stopped);
+                SourceDataLine l = line;
+                if (!stopped && l != null) {
+                    l.drain(); // let the end of a one-off sound finish
                 }
-            } while (loop && !stopped);
+            } catch (Throwable e) {
+                if (!stopped) {
+                    System.err.println("Sound playback failed for '" + path + "': " + e.getMessage());
+                }
+            } finally {
+                closeLine();
+            }
+        }
+
+        /** Decodes frame by frame, scales each one by the current music volume and writes it out. */
+        private void playStream(InputStream in) throws Exception {
+            Bitstream bitstream = new Bitstream(in);
+            Decoder decoder = new Decoder();
+            byte[] out = new byte[0];
+            try {
+                Header header;
+                while (!stopped && (header = bitstream.readFrame()) != null) {
+                    SampleBuffer samples = (SampleBuffer) decoder.decodeFrame(header, bitstream);
+                    SourceDataLine l = line;
+                    if (l == null) {
+                        l = openLine(samples.getSampleFrequency(), samples.getChannelCount());
+                    }
+                    short[] buf = samples.getBuffer();
+                    int len = samples.getBufferLength();
+                    if (out.length < len * 2) {
+                        out = new byte[len * 2];
+                    }
+                    float gain = SoundSettings.gain(SoundSettings.getMusic());
+                    for (int i = 0; i < len; i++) {
+                        int v = Math.round(buf[i] * gain);
+                        out[2 * i] = (byte) v;            // little endian, signed 16-bit
+                        out[2 * i + 1] = (byte) (v >> 8);
+                    }
+                    l.write(out, 0, len * 2);
+                    bitstream.closeFrame();
+                }
+            } finally {
+                bitstream.close();
+            }
+        }
+
+        private SourceDataLine openLine(int rate, int channels) throws Exception {
+            AudioFormat format = new AudioFormat(rate, 16, channels, true, false);
+            SourceDataLine l = (SourceDataLine) AudioSystem.getLine(new DataLine.Info(SourceDataLine.class, format));
+            int frameBytes = 2 * channels;
+            int buffer = (int) (rate * BUFFER_SECONDS) * frameBytes;
+            l.open(format, buffer);
+            l.start();
+            line = l;
+            return l;
+        }
+
+        private void closeLine() {
+            SourceDataLine l = line;
+            if (l != null) {
+                try {
+                    l.stop();
+                    l.close();
+                } catch (Throwable ignored) {
+                    // nothing to do
+                }
+            }
         }
     }
 }

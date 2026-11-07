@@ -20,6 +20,7 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 public class MainFrame extends JFrame {
@@ -41,6 +42,7 @@ public class MainFrame extends JFrame {
     private TopicPanel theoreticalPanel;
     private TopicPanel practicalPanel;
     private QuestionPanel questionPanel;
+    private final SettingsOverlay settings = new SettingsOverlay();
     private boolean fullScreen = false;
 
     public MainFrame() {
@@ -69,6 +71,9 @@ public class MainFrame extends JFrame {
 
         cards.setPreferredSize(new Dimension(1000, 707));
         setContentPane(cards);
+        // The sound settings float above every screen as the glass pane (setGlassPane hides it, so show it again).
+        setGlassPane(settings);
+        settings.setVisible(true);
         applyCustomCursor();
         pack();
         setResizable(false);
@@ -80,7 +85,14 @@ public class MainFrame extends JFrame {
         });
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "leaveFullScreen");
         getRootPane().getActionMap().put("leaveFullScreen", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent e) { if (fullScreen) setFullScreen(false); }
+            @Override public void actionPerformed(ActionEvent e) {
+                if (settings.isOpen()) settings.close();   // Esc closes the sound dialog first
+                else if (fullScreen) setFullScreen(false);
+            }
+        });
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_M, 0), "toggleSound");
+        getRootPane().getActionMap().put("toggleSound", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { settings.toggle(); }
         });
 
         showScreen(SPLASH);
@@ -131,15 +143,27 @@ public class MainFrame extends JFrame {
      * each difficulty, with the four choices shuffled. Reuses the single question window.
      */
     public void startTopic(String branch, String topic) {
+        startTopic(branch, topic, QuestionPanel.MAX_LIVES);
+    }
+
+    /** Same, but the player begins with the given number of hearts (carried over from the last module). */
+    private void startTopic(String branch, String topic, int startLives) {
         boolean theoretical = branch.equalsIgnoreCase("Theoretical");
         int topicIndex = questionBank.topics(branch).indexOf(topic);
         String title = theoretical && topicIndex >= 0
                 ? "Module " + (topicIndex + 1) + " - " + topic
                 : branch + " - " + topic;
         Supplier<String> onWin = theoretical ? () -> unlockAfter(topicIndex) : null;
+        // After a win, "Next Level" opens the following module (only for the theoretical modules).
+        java.util.List<String> topics = questionBank.topics(branch);
+        int next = topicIndex + 1;
+        IntConsumer onNext = theoretical && topicIndex >= 0 && next < topics.size()
+                && next < theoreticalUnlocked.length
+                ? hearts -> startTopic(branch, topics.get(next), hearts)
+                : null;
         questionPanel.startTopic(title,
                 () -> questionBank.drawStage(branch, topic, QUESTIONS_PER_STAGE),
-                theoretical ? THEORETICAL : PRACTICAL, onWin);
+                theoretical ? THEORETICAL : PRACTICAL, onWin, onNext, startLives);
         showScreen(QUESTION);
     }
 
